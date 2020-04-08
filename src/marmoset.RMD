@@ -3,7 +3,7 @@ title: "Analysis of marmoset data"
 output: html_document
 ---
 
-This vignette shows annotation of BM+CB dataset from the [CellAnnotatoR tutorial](https://github.com/khodosevichlab/CellAnnotatoR/blob/master/vignettes/mca_marker_selection.md) 
+This file shows analysis of the visual cortex (V1) data from marmoset from the [CellAnnotatoR tutorial](https://github.com/khodosevichlab/CellAnnotatoR/blob/master/vignettes/mca_marker_selection.md) 
 
 ```{r}
 library(ggplot2)

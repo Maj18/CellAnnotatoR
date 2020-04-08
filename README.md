@@ -1,9 +1,6 @@
----
-title: "Analysis of marmoset data"
-output: html_document
----
+# Analysis of marmoset data
 
-This vignette shows annotation of BM+CB dataset from the [CellAnnotatoR tutorial](https://github.com/khodosevichlab/CellAnnotatoR/blob/master/vignettes/mca_marker_selection.md) 
+This file shows how to analyze the visual cortex (V1) data from marmoset  using CellAnnotatoR [CellAnnotatoR tutorial](https://github.com/khodosevichlab/CellAnnotatoR/blob/master/vignettes/mca_marker_selection.md) 
 
 ```{r}
 library(ggplot2)
@@ -17,7 +14,7 @@ library(CellAnnotatoR)
 theme_set(theme_bw())
 ``
 
-## The he visual cortex (V1) data from marmoset has been re-processed
+The visual cortex (V1) data from marmoset has been re-processed
 
 ## Import the visual cortex (V1) data from marmoset
 
@@ -36,7 +33,7 @@ conos::embeddingPlot(p3$embeddings$PCA$UMAP_graph, groups=p3$clusters$PCA$leiden
 
 ## Define hierarchy
 
-# The automated algorithm is rather simple and will be improved in future. And currently, it can not be used on the aligned data.
+The automated algorithm is rather simple and will be improved in future. And currently, it can not be used on the aligned data.
 
 ```{r} 
 hierarchy3 <- deriveHierarchy(p3$reductions$PCA, p3$clusters$PCA$leiden, max.depth=3)
@@ -74,3 +71,4 @@ Next, do TF-IDF normalization of the matrix:
 ```{r}
 cm_norm <- p3$counts %>% normalizeTfIdfWithFeatures() %>% .[names(p3$clusters$PCA$leiden), ]
 ```
+To be continued
