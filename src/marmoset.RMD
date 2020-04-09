@@ -3,7 +3,7 @@ title: "Analysis of marmoset data"
 output: html_document
 ---
 
-This file shows analysis of the visual cortex (V1) data from marmoset from the [CellAnnotatoR tutorial](https://github.com/khodosevichlab/CellAnnotatoR/blob/master/vignettes/mca_marker_selection.md) 
+This file shows how the visual cortex (V1) data from marmoset is analysed using CellAnnotatoR following [CellAnnotatoR tutorial](https://github.com/khodosevichlab/CellAnnotatoR/blob/master/vignettes/mca_marker_selection.md) 
 
 ```{r}
 library(ggplot2)
@@ -43,6 +43,9 @@ hierarchy3 <- deriveHierarchy(p3$reductions$PCA, p3$clusters$PCA$leiden, max.dep
 clf_tree3 <- hierarchyToClassificationTree(hierarchy3)
 plotTypeHierarchy(clf_tree3)
 ```
+Here, I think the 2nd level has too many nodes?
+
+There are too many cell type clusters?
 
 Annotation by level:
 
@@ -50,5 +53,26 @@ Annotation by level:
 ann_by_level3 <- mergeAnnotationByLevels(p3$clusters$PCA$leiden, clf_tree3)
 plotAnnotationByLevels(p3$embeddings$PCA, ann_by_level3, font.size=c(2, 3), n.col=3, shuffle.colors=T)
 ```
+## Marker selection
 
-To run render the file: rmarkdown::render(marmoset.RMD)
+First, we need to find DE genes for each sub-brunch of the hierarchy:
+
+```{r}
+ann_by_parent3 <- getAnnotationPerParent(clf_tree3, p3$clusters$PCA$leiden)
+as.character(ann_by_parent3)
+```
+
+Get DE genes for each "parent" cell type
+
+```{r}
+de_info_per_parent3 <- ann_by_parent3 %>% 
+  pblapply(function(ann) p3$getDifferentialGenes(groups=ann, z.threshold=0))
+
+#It is this step that crashed in my docker container.
+
+de_info_per_parent3 <- pbmapply(function(de, ann) prepareDeInfo(de, ann, cm.raw=p3$misc$rawCounts, n.cores=10), 
+                               de_info_per_parent3, ann_by_parent3)
+```
+
+
+To render the file: rmarkdown::render(marmoset.RMD)
