@@ -41,14 +41,14 @@ clf_tree3 <- hierarchyToClassificationTree(hierarchy3)
 plotTypeHierarchy(clf_tree3)
 ```
 
+## Marker selection
+
 Annotation by level:
 
 ```{r}
 ann_by_level3 <- mergeAnnotationByLevels(p3$clusters$PCA$leiden, clf_tree3)
 plotAnnotationByLevels(p3$embeddings$PCA, ann_by_level3, font.size=c(2, 3), n.col=3, shuffle.colors=T)
 ```
-
-## Marker selection
 
 First, we need to find DE genes for each sub-brunch of the hierarchy:
 
