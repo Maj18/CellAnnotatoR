@@ -1,4 +1,4 @@
-#Here I have modified the function "preSelectMarkersForType", to take the "NULL" (no DE genes) conditions into consideration:
+#Here I have modified the function "preSelectMarkersForType", to take the "NULL" (some cell type has no DE genes that have been identified) conditions into consideration:
 preSelectMarkersForType <- function(de.df, whitelist=NULL, blacklist=NULL, min.pos.markers=5, max.pos.markers=100,
                                     min.pos.specificity=0.2, min.pos.expression.frac=0.1,
                                     min.pos.markers.soft=as.integer(round(mean(c(min.pos.markers, max.pos.markers)))),
