@@ -1,4 +1,5 @@
 #Here I have modified the function "preSelectMarkersForType", to take the "NULL" (some cell type has no DE genes that have been identified) conditions into consideration:
+#Modification: return(list(positive=as.character(pos.markers[!is.na(pos.markers)]), negative=as.character(neg.markers[!is.na(neg.markers)])))
 preSelectMarkersForType <- function(de.df, whitelist=NULL, blacklist=NULL, min.pos.markers=5, max.pos.markers=100,
                                     min.pos.specificity=0.2, min.pos.expression.frac=0.1,
                                     min.pos.markers.soft=as.integer(round(mean(c(min.pos.markers, max.pos.markers)))),
@@ -11,8 +12,8 @@ preSelectMarkersForType <- function(de.df, whitelist=NULL, blacklist=NULL, min.p
     de.df %<>% dplyr::filter(!(Gene %in% blacklist))
   }
   if (length(de.df) == 0) { #To handle those cells without DE genes
-    neg.markers <- NA
-    pos.markers <- NA} else {
+    neg.markers <- NULL
+    pos.markers <- NULL} else {
       de.pos <- de.df[de.df$Z > 0, ]
       if (sum(de.pos$Specificity > min.pos.specificity) < min.pos.markers) {
         pos.markers <- de.pos$Gene[order(de.pos$Specificity, decreasing=T) %>% .[1:min(min.pos.markers, length(.))]]
@@ -35,5 +36,6 @@ preSelectMarkersForType <- function(de.df, whitelist=NULL, blacklist=NULL, min.p
       # Negative: ExpressionFraction < 0.1 && Z < 0 && top by specificity (or > 0.95)
       neg.markers <- de.df %>% .[(.$Z < 0) & (.$ExpressionFraction < max.neg.expression.frac), ] %>% .$Gene
     }
-  return(list(positive=pos.markers[!is.na(pos.markers)], negative=neg.markers[!is.na(neg.markers)]))
+  #return(list(positive=pos.markers[!is.na(pos.markers)], negative=neg.markers[!is.na(neg.markers)]))
+  return(list(positive=as.character(pos.markers[!is.na(pos.markers)]), negative=as.character(neg.markers[!is.na(neg.markers)])))
 }    
