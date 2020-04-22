@@ -53,12 +53,12 @@ source("~/src/markerSelection/preSelectMarkersForType.R") #This version took cel
 de_per_parent3, store DE gene between subtypes within each parent cell type + DE genes between parent cell types under root.
 
 saveRDS(MarkerCandidates, file = "~/data/marmoset/denovoannotation/MarkerCandidates.rds")
+
 MarkerCandidates <- readRDS(file="~/data/marmoset/denovoannotation/MarkerCandidates.rds")
 
+## 3. Plot the markers on your data and ensure that they suit your case
 
 Below I will use cell type l1_11 (see "~/data/marmoset/hierarchy_auto/marmosetv1_hierarchy.pdf") as an example
-
-## 3. Plot the markers on your data and ensure that they suit your case
 
 Seurat has its own functions for plotting gene expression, but for general case CellAnnotatoR provides the functionn plotGeneExpression(genes, embedding, cm, ...). It returns list of plots for individual genes. Note: matrix cm must be transposed, i.e. have genes as columns and cells as rows.
 
@@ -118,6 +118,7 @@ cm_norm <- p3$misc$rawCounts %>% normalizeTfIdfWithFeatures() %>% t()
 ```
 
 saveRDS(cm_norm, file="~/data/marmoset/denovoannotation/cm_norm.rds")
+
 cm_norm <- readRDS("~/data/marmoset/denovoannotation/cm_norm.rds")
 
 ```{r}
@@ -134,8 +135,11 @@ clf_data <- res
 ```
 
 saveRDS(clf_data,file="~/data/marmoset/denovoannotation/clf_data.rds")
+
 clf_data <- readRDS("~/data/marmoset/denovoannotation/clf_data.rds")
+
 saveRDS(classification.tree,file="~/data/marmoset/denovoannotation/classification.tree.rds")
+
 saveRDS(clf_tree3,file="~/data/marmoset/denovoannotation/clf_tree3.rds")
 
 ### Second, the most time-consuming step for classification is label propagation on graph. It improves classification quality in many cases, but for getting approximate results we can avoid this. To do so, it's enough to pass NULL instead of the graph object:
