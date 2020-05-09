@@ -1,95 +1,19 @@
-#' Aggregate Score Change per Gene
-#' @description Aggregates score chage over all type. Either average (`balance.cell.types=T`)
-#' or sum (`balance.cell.types=F`) it per cell type and returns sum of signed scores
-aggregateScoreChangePerGene <- function(d.scores, annotation, marker.type, cell.type, target.type=NULL, balance.cell.types=T, self.mult=1) {
-  aggr.func <- if (balance.cell.types) Matrix::colMeans else Matrix::colSums
-
-  cids.per.type <- names(annotation) %>% match(rownames(d.scores)) %>% split(annotation)
-  scores.per.type <- cids.per.type %>%
-    lapply(function(cids) aggr.func(d.scores[cids,, drop=F])) %>%
-    Reduce(cbind, .) %>% `colnames<-`(names(cids.per.type)) %>% `*`(-1)
-  # scores.per.type[,cell.type] %<>% `*`(-self.mult)
-  scores.per.type[,cell.type] %<>% `*`(-1)
-  if (!is.null(target.type)) {
-    scores.per.type[,target.type] %<>% `*`(self.mult)
-  }
-  d.scores <- rowSums(scores.per.type) %>% sort(decreasing=T)
-  res <- tibble::tibble(Gene=names(d.scores), Score=d.scores, Type=cell.type, MT=marker.type)
-  if (!is.null(target.type)) {
-    res$ScoreTarget <- scores.per.type[res$Gene, target.type]
-  }
-
-  return(res)
-}
-
-estimatePositiveMarkerScoreChange <- function(cell.type, annotation, cm.norm, de.genes, pos.scores, neg.scores, sum.scores, aggr=T, ...) {
-  if (length(de.genes) == 0)
-    stop("de.genes are empty for ", cell.type)
-
-  sum.scores %<>% pmax(1e-30)
-
-  c.exprs <- as.matrix(cm.norm[, de.genes, drop=F])
-
-  c.neg.scores <- (1 - neg.scores[, cell.type])
-  c.pos.scores <- pos.scores[, cell.type] * c.neg.scores
-  ds <- c.exprs * c.neg.scores
-  ds <- (ds + c.pos.scores) / (ds + sum.scores) - (c.pos.scores / sum.scores)
-
-  if (!aggr)
-    return(ds)
-
-  return(aggregateScoreChangePerGene(ds, annotation, marker.type="expressed", cell.type=cell.type, ...))
-}
-
-estimateNegativeMarkerScoreChange <- function(cell.type, annotation, cm.norm, de.genes, pos.scores, neg.scores,
-                                              sum.scores, max.pos.scores, max.neg.score.per.pos.type=0.1, aggr=T, ...) {
-  if (length(de.genes) == 0)
-    stop("de.genes are empty for ", cell.type)
-
-  sum.scores %<>% pmax(1e-30)
-  max.pos.scores <- pmax(max.pos.scores[,cell.type], 1e-30)
-  mask <- (annotation == cell.type)
-  pos.ids <- which(mask)
-  neg.ids <- which(!mask)
-
-  c.exprs <- as.matrix(cm.norm[, de.genes, drop=F])
-
-  c.pos.scores <- pos.scores[,cell.type]
-  c.pos.scores[pos.ids] <- sum.scores[pos.ids] # In ideal world, all positive score for a cell came from the proper cell type
-
-  new.neg.scores <- estimateNewNegativeScores(c.exprs, max.pos.scores, neg.scores[,cell.type]) %>%
-    `dimnames<-`(dimnames(c.exprs))
-
-  old.scores <- c.pos.scores * (1 - neg.scores[,cell.type])
-  ds <- (c.pos.scores * (1 - new.neg.scores) - old.scores)
-
-  new.scores <- c.pos.scores * (1 - new.neg.scores)
-  ds <- new.scores / pmax(sum.scores + new.scores - old.scores, 1e-30) - (old.scores / pmax(sum.scores, 1e-30))
-
-  if (!aggr)
-    return(ds)
-
-  res <- aggregateScoreChangePerGene(ds, annotation, marker.type="not_expressed", cell.type=cell.type, ...)
-  res$Score[Matrix::colMeans(new.neg.scores[pos.ids, res$Gene]) > max.neg.score.per.pos.type] <- -Inf
-  return(res)
-}
-
 prepareMarkerScoringInfo <- function(score.infos) {
   return(list(
     sum.scores=sapply(score.infos, `[[`, "scores") %>% rowSums(),
     pos.scores=sapply(score.infos, `[[`, "scores.raw"),
-    neg.scores=1 - sapply(score.infos, `[[`, "mult"),
+    neg.scores=1 - sapply(score.infos, `[[`, "mult"), # mult: only the second part of S(neg)?8
     max.pos.scores=sapply(score.infos, `[[`, "max.positive")
   ))
 }
 
 initializeMarkerList <- function(pos.markers.per.type, cm.norm, annotation, debug=F) {
   marker.list <- lapply(pos.markers.per.type, function(x) list(expressed=c(), not_expressed=c()))
-  subtypes.left <- names(pos.markers.per.type)
+  subtypes.left <- names(pos.markers.per.type) #types—>subtypes: names
   for (i in 1:length(subtypes.left)) {
     s.info <- lapply(marker.list, getCellTypeScoreInfo, cm.norm) %>% prepareMarkerScoringInfo()
 
-    marker.score <- subtypes.left %>% lapply(function(ct)
+    marker.score <- subtypes.left %>% lapply(function(ct) #what is marker.score????
       estimatePositiveMarkerScoreChange(ct, annotation, cm.norm, pos.markers.per.type[[ct]], s.info$pos.scores,
                                         s.info$neg.scores, s.info$sum.scores, balance.cell.types=F)
     ) %>% Reduce(rbind, .) %>% .[which.max(.$Score),]
@@ -113,6 +37,86 @@ initializeMarkerList <- function(pos.markers.per.type, cm.norm, annotation, debu
 
   return(marker.list)
 }
+
+#' Aggregate Score Change per Gene
+#' @description Aggregates score change over all types. Either average (`balance.cell.types=T`)
+#' or sum (`balance.cell.types=F`) it per cell type and returns sum of signed scores
+aggregateScoreChangePerGene <- function(d.scores, annotation, marker.type, cell.type, target.type=NULL, balance.cell.types=T, self.mult=1) {
+  aggr.func <- if (balance.cell.types) Matrix::colMeans else Matrix::colSums #
+
+  cids.per.type <- names(annotation) %>% match(rownames(d.scores)) %>% split(annotation)
+  scores.per.type <- cids.per.type %>%
+    lapply(function(cids) aggr.func(d.scores[cids,, drop=F])) %>%
+    Reduce(cbind, .) %>% `colnames<-`(names(cids.per.type)) %>% `*`(-1)
+  # scores.per.type[,cell.type] %<>% `*`(-self.mult)
+  scores.per.type[,cell.type] %<>% `*`(-1)
+  if (!is.null(target.type)) {
+    scores.per.type[,target.type] %<>% `*`(self.mult)
+  }
+  d.scores <- rowSums(scores.per.type) %>% sort(decreasing=T)
+  res <- tibble::tibble(Gene=names(d.scores), Score=d.scores, Type=cell.type, MT=marker.type)
+  if (!is.null(target.type)) {
+    res$ScoreTarget <- scores.per.type[res$Gene, target.type]
+  }
+
+  return(res)
+}
+
+#What does this funciton do? What are all those parameters about?
+#The score changes if one adds/removes one or more positive scores
+#maybe here pos.scores, neg.scores and sum.scores are scores before the change???
+estimatePositiveMarkerScoreChange <- function(cell.type, annotation, cm.norm, de.genes, pos.scores, neg.scores, sum.scores, aggr=T, ...) {
+  if (length(de.genes) == 0)
+    stop("de.genes are empty for ", cell.type)
+
+  sum.scores %<>% pmax(1e-30) # the element of sum.scores and 1e-30, which is bigger. What is sum.scores?
+
+  c.exprs <- as.matrix(cm.norm[, de.genes, drop=F]) #take the TF-IDF values only for the de.genes #here this cm.norm has genes in column
+
+  c.neg.scores <- (1 - neg.scores[, cell.type]) #  max(TF-IDFneg)/max(TF-IDFpos)????
+  c.pos.scores <- pos.scores[, cell.type] * c.neg.scores #for the intersect of each cell and cell type, calcualting S(t)????
+  ds <- c.exprs * c.neg.scores #for each grid, TF-IDF value* S(neg)
+  ds <- (ds + c.pos.scores) / (ds + sum.scores) - (c.pos.scores / sum.scores) #what does ds mean?
+
+  if (!aggr)
+    return(ds)
+
+  return(aggregateScoreChangePerGene(ds, annotation, marker.type="expressed", cell.type=cell.type, ...))
+}
+
+estimateNegativeMarkerScoreChange <- function(cell.type, annotation, cm.norm, de.genes, pos.scores, neg.scores,
+                                              sum.scores, max.pos.scores, max.neg.score.per.pos.type=0.1, aggr=T, ...) {
+  if (length(de.genes) == 0)
+    stop("de.genes are empty for ", cell.type)
+
+  sum.scores %<>% pmax(1e-30)
+  max.pos.scores <- pmax(max.pos.scores[,cell.type], 1e-30) #max.pos.scores among genes??
+  mask <- (annotation == cell.type)
+  pos.ids <- which(mask) #pos.id: marker id??
+  neg.ids <- which(!mask)
+
+  c.exprs <- as.matrix(cm.norm[, de.genes, drop=F])
+
+  c.pos.scores <- pos.scores[,cell.type]
+  c.pos.scores[pos.ids] <- sum.scores[pos.ids] # In ideal world, all positive score for a cell came from the proper cell type
+
+  new.neg.scores <- estimateNewNegativeScores(c.exprs, max.pos.scores, neg.scores[,cell.type]) %>%
+    `dimnames<-`(dimnames(c.exprs))
+
+  old.scores <- c.pos.scores * (1 - neg.scores[,cell.type])
+  ds <- (c.pos.scores * (1 - new.neg.scores) - old.scores) # this makes sense!
+
+  new.scores <- c.pos.scores * (1 - new.neg.scores)
+  ds <- new.scores / pmax(sum.scores + new.scores - old.scores, 1e-30) - (old.scores / pmax(sum.scores, 1e-30))
+
+  if (!aggr)
+    return(ds)
+
+  res <- aggregateScoreChangePerGene(ds, annotation, marker.type="not_expressed", cell.type=cell.type, ...) #????
+  res$Score[Matrix::colMeans(new.neg.scores[pos.ids, res$Gene]) > max.neg.score.per.pos.type] <- -Inf #????
+  return(res)
+}
+
 
 updateMarkersPerType <- function(markers.per.type, marker.list=NULL, marker.info=NULL) {
   if (!is.null(marker.list)) {
@@ -356,12 +360,12 @@ selectMarkersPerType <- function(cm.norm, annotation, markers.per.type, marker.l
     marker.list[[n]]$locked <- T
   }
 
-  marker.list %<>% prepareInitialMarkerList(names(markers.per.type$positive), parent=parent)
+  marker.list %<>% prepareInitialMarkerList(names(markers.per.type$positive), parent=parent) #the maker list here is empty
 
-  cm.norm %<>% .[unique(unlist(markers.per.type)), names(annotation)] %>% as.matrix() %>% Matrix::t()
+  cm.norm %<>% .[unique(unlist(markers.per.type)), names(annotation)] %>% as.matrix() %>% Matrix::t() #only take the columns with the pre-selected markers
   mean.unc.per.type <- (1 - getMeanConfidencePerType(marker.list, cm.norm, annotation))
   did.refinement <- F
-  for (i in 1:max.iters) {
+  for (i in 1:max.iters) { # why max.iters are the number of genes
     n.markers.per.cell <- sapply(marker.list, function(x) length(x$expressed))[names(mean.unc.per.type)]
     type.mask <- (n.markers.per.cell < max.pos.markers) & (sapply(markers.per.type$positive, length)[names(mean.unc.per.type)] > 0)
     if (sum(type.mask) == 0)

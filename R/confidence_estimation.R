@@ -5,8 +5,8 @@ getAnnotationConfidence <- function(annotation, scores) {
 
 #' Score Per Cell Uncertainty
 #' @description Score uncertainty per each cell
-#' @param annotation assigned annotation labels. Can be obtrained with `assignCellsByScores`.
-#' @param scores.norm assignment scores. Can be obtrained with `assignCellsByScores`.
+#' @param annotation assigned annotation labels. Can be obtrained with `assignCellsByScores`. #ann_by_level$annotation
+#' @param scores.norm assignment scores. Can be obtrained with `assignCellsByScores`. #ann_by_level$scores
 #' @param score.info list of marker scores per cell type. Can be obtained with `getMarkerScoreInfo`
 #' @param cur.types subset of types used to measure uncertainty. Default: all values presented in annotation
 #' @param coverage.max.quantile all coverage values above this quantille are winsorized
@@ -25,7 +25,7 @@ scorePerCellUncertainty <- function(annotation, scores.norm, score.info, cur.typ
 
   coverage <- cur.types %>%
     lapply(function(n) score.info[[n]]$scores[cbs.per.type[[n]]]) %>%
-    Reduce(c, .) %>% pmin(quantile(., coverage.max.quantile))
+    Reduce(c, .) %>% pmin(quantile(., coverage.max.quantile))  #Reduce(c,.): list to vector
 
   return(list(
     positive=(1 - positive),
