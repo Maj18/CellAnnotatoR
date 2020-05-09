@@ -1,0 +1,62 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+
+
+```{r}
+clf.df.auto <- CellAnnotatoR:::classificationTreeToDf(clf.data.auto)
+cm_norm <- p2$counts %>% Matrix::t() %>% normalizeTfIdfWithFeatures()
+devtools::load_all("~/CellAnnotatoR")
+de.info.per.parentM <- ann.by.parentM %>%
+    pblapply(function(ann) p2$getDifferentialGenes(groups=ann, z.threshold=0, append.auc=T))
+getDifferentialGenes()
+
+%>% setNames(names(marker.listM))
+[names(ann.by.all.typeM[[n]])
+  intersect(names(ann.by.parentM), colnames(c.scores)) %>% setNames(.,.) %>%
+    lapply(function(n) names(ann.by.parentM[[n]]) %>% setNames(c.scores[names(ann.by.all.typeM[[n]]),.],.))
+  
+  types.by.level <- lapply(ann.by.levelM, function(n) intersect(unique(n), c.scores%>%colnames()))
+  confidence <- list()
+  for (level.name in names(types.by.level)) {
+    confidence[[level.name]] <- mapply(function(m,n) c.scores[m,n], lapply(ann.by.all.typeM[types.by.level[[level.name]]], names), types.by.level[[level.name]])
+    getMarkerScoreInfo()
+  }
+
+
+sapply(unc.by.cells.per.type, function(n) unlist(n)%>%mean)
+
+  types.by.level[[level.name]]
+  
+  
+  
+  
+pre.selected.markersM <- getPreMarkers(p2, ann.all.type)
+marker.listM <- selectMarkerAllTypes(pre.selected.markersM, cm.norm, ann.all.type,
+                                     max.iters=500, max.uncertainty=0.25, log.step=5, verbose=1, n.cores=10)
+
+mean.unc.by.all.typesO <- meanUncByTypes(marker.listM, cm.norm, ann.all.type)
+```
+
+
+```{r, fig.width=14, fig.height=10}
+MARKER <- mean.unc.by.all.types.coll2$marker_list
+remove <- MARKER[sapply(MARKER, function(x) length(x$expressed) == 0)] %>% names()
+MARKER %<>% .[sapply(., function(x) !(x$parent %in% remove) & (length(x$expressed)>0))]
+#MARKER[sapply(MARKER, function(x) length(x$expressed) == 0)] %<>% lapply(function(n) list("expressed"="marker", 
+                                                                                          #"not_expressed"="marker","parent"=n$parent))
+
+#MARKER%>% markerListToMarkup(file="~/data/separability/mouse_visp_marker_selection/markers_coll2.txt", group.by.parent=F) 
+
+clf_data_coll2 <- getClassificationData(cm_norm, MARKER, prenormalized=T)
+
+ann_by_level_coll2 <- assignCellsByScores(p2$graphs$PCA, clf_data_coll2, clusters=p2$clusters$PCA$leiden)
+
+MARKER[sort(unique(ann_by_level_coll2$annotation$l2))] %>% lapply(`[[`, "expressed") %>% 
+    unlist() %>% unique() %>% 
+    plotExpressionViolinMap(p2$counts, ann_by_level_coll2$annotation$l2, gene.order=T)
+```
+
+

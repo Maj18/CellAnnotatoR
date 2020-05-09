@@ -1,0 +1,50 @@
+---
+title: "Plot uncertainty (positive, negative, coverage) on trees"
+output: html_notebook
+---
+
+```{r, message=FALSE}
+devtools::load_all("/Users/yuanli/Documents/Degree_project/Hierarchical_annotation/bin/plothierarhy")
+library(ggplot2)
+library(magrittr)
+library(Matrix)
+library(pbapply)
+library(dplyr)
+library(readr)
+library(ape)
+library("treeio") 
+library("ggtree")
+```
+### Import data
+```{r}
+c.data.auto <- readRDS("/Users/yuanli/Documents/Degree_project/Hierarchical_annotation/bin/plothierarhy/notebooks/classificationtrees/clf.data.auto.rds")
+c.data.coll2 <- readRDS("/Users/yuanli/Documents/Degree_project/Hierarchical_annotation/bin/plothierarhy/notebooks/classificationtrees/clf.data.coll2.rds")
+c.data.man <- readRDS("/Users/yuanli/Documents/Degree_project/Hierarchical_annotation/bin/plothierarhy/notebooks/classificationtrees/clf.data.man.rds")
+c.data.pre <- readRDS("/Users/yuanli/Documents/Degree_project/Hierarchical_annotation/bin/plothierarhy/notebooks/classificationtrees/clf.data.pre.rds")
+
+trait.file.auto <- readRDS("/Users/yuanli/Documents/Degree_project/Hierarchical_annotation/bin/plothierarhy/notebooks/traitfiles/unc.trait.auto.rds")
+trait.file.coll2 <- readRDS("/Users/yuanli/Documents/Degree_project/Hierarchical_annotation/bin/plothierarhy/notebooks/traitfiles/unc.trait.coll2.rds")
+trait.file.man <- readRDS("/Users/yuanli/Documents/Degree_project/Hierarchical_annotation/bin/plothierarhy/notebooks/traitfiles/unc.trait.man.rds")
+trait.file.pre <- readRDS("/Users/yuanli/Documents/Degree_project/Hierarchical_annotation/bin/plothierarhy/notebooks/traitfiles/unc.trait.pre.rds")
+```
+
+## Plot uncertainty on tree
+### For the automatic tree:
+```{r, fig.height=5, fig.width=8}
+plotTypeHierarchy(c.data.auto, trait.file.auto, layout="slanted", xlims=NULL, font.size=3)
+```
+
+### For the partly collapsed tree
+```{r, fig.height=5, fig.width=8}
+plotTypeHierarchy(c.data.coll2, trait.file.coll2, layout="slanted", xlims=NULL, font.size=3)
+```
+
+### For the correct manual tree
+```{r, fig.height=5, fig.width=8}
+plotTypeHierarchy(c.data.man, trait.file.man, layout="slanted", xlims=NULL, font.size=3)
+```
+
+### For the ML predicted tree
+```{r, fig.height=5, fig.width=8}
+plotTypeHierarchy(c.data.pre, trait.file.pre, layout="slanted", xlims=NULL, font.size=3)
+```
