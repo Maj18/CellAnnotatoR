@@ -15,10 +15,10 @@ tfIdfOnType <- function(p2, ann.by.level, clf.data){
   colsum <- mean.GE.per.type.per.gene %>% lapply(function(n) rep(colSums(n), nrow(n))%>%matrix(nrow=nrow(n), ncol=ncol(n), byrow=T)) #GE: gene expression; colsum has the same data structure as mean.GE.per.type.per.gene. each matrix object within it has the same nrow and ncol as the corresponding object in mean.GE.per.type.per.gene; all rows have the same values (col sums of the corresponding object in mean.GE.per.type.per.gene)
   rowsum <- mean.GE.per.type.per.gene %>% lapply(function(n) rep(rowSums(n), ncol(n))%>%matrix(nrow=nrow(n), ncol=ncol(n), byrow=F))
 
-  max.total.GE.per.cell <- sapply(colsum, function(n) nrow(n)/n[1,]) %>% unlist() %>% max() #The maximum of the per-cell total gene expression levels.
+  c <- sapply(rowsum, function(n) nrow(n)/max(n[1,])) %>% unlist() %>% min() # scaling factor, to make the make cell type number and per-gene total expression of all cells on the same scale.
   tfidf.per.type.per.gene <- list()
   for (i in names(mean.GE.per.type.per.gene)) { #i: hierarchical level
-    tfidf.per.type.per.gene[[i]]<-(mean.GE.per.type.per.gene[[i]]/rowsum[[i]])+log(ncol(colsum[[i]])/max.total.GE.per.cell*colsum[[i]]) #The point to have max.total.GE.per.cel here is that the gene expression data here is normalized (max may be only 1.7), not read count, so a bit deviate from the orignal tf-idf idea (where here it is the total number of documents that contain a particular word).
+    tfidf.per.type.per.gene[[i]]<-(mean.GE.per.type.per.gene[[i]]/colsum[[i]])*log(nrow(colsum[[i]])/c*rowsum[[i]]) #The point to have c here is that the gene expression data here is normalized (between 0 and 1), not read count, so a bit deviate from the orignal tf-idf idea (where here it is the total number of documents that contain a particular word/translated to the present case: the number of cell types that contain a particular gene).
   } #tfidf.per.type.per.gene: a list of hierarchial levels, each level has a dataframe: col, cell types; row, genes.
 
   markers.per.type <- clf.data$marker.list %>% lapply(function(n) n$"expressed") #here, we only take positive markers!!!!! markers.per.type: a list of cell types, each type has positive markers.
