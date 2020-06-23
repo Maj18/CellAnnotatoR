@@ -319,7 +319,7 @@ normalizeScores <- function(scores, min.val=1e-10) {
 #'
 #' @return data.frame with rows corresponding to cells and columns corresponding to cell types.
 #'   Values are cell type scores, normalized per level of hierarchy
-getMarkerScoresPerCellType <- function(clf.data, score.info=NULL, aggr=T) {
+getMarkerScoresPerCellTypeLi <- function(clf.data, score.info=NULL, aggr=T) {
   if (is.null(score.info)) {
     score.info <- getMarkerScoreInfo(clf.data, aggr=aggr)
   }
@@ -331,9 +331,39 @@ getMarkerScoresPerCellType <- function(clf.data, score.info=NULL, aggr=T) {
   clf.nodes <- classificationTreeToDf(clf.data$classification.tree)
   scores %<>% as.data.frame(optional=T)
 
+  parent <- split(clf.nodes$Parent, clf.nodes$PathLen)
+  node <- split(clf.nodes$Node, clf.nodes$PathLen)
+  family <- lapply(1:length(parent), function(n) split(node[[n]], parent[[n]])) %>% unlist(recursive=F)
+  
+  scores <- lapply(family, function(n) scores[,n]%<>% normalizeScores())
+  coln<- scores %>% sapply(colnames) %>% Reduce(c,.)
+  scores %<>% as.data.frame 
+  colnames(scores) <- coln
+
+  return(scores)
+}
+
+
+#' Useful for debugging list of markers.
+#' @inheritParams getMarkerScoreInfo
+#'
+#' @return data.frame with rows corresponding to cells and columns corresponding to cell types.
+#'   Values are cell type scores, normalized per level of hierarchy
+getMarkerScoresPerCellType <- function(clf.data, score.info=NULL, aggr=T) {
+  if (is.null(score.info)) {
+    score.info <- getMarkerScoreInfo(clf.data, aggr=aggr)
+  }
+  
+  scores <- lapply(score.info, `[[`, "scores")
+  if (!aggr)
+    return(lapply(scores, as.matrix) %>% lapply(as.data.frame, optional=T))
+  
+  clf.nodes <- classificationTreeToDf(clf.data$classification.tree)
+  scores %<>% as.data.frame(optional=T)
+  
   for (nodes in split(clf.nodes$Node, clf.nodes$PathLen)) {
     scores[, nodes]  %<>% normalizeScores()
   }
-
+  
   return(scores)
 }
