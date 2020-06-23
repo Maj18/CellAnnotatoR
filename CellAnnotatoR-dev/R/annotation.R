@@ -335,7 +335,7 @@ getMarkerScoresPerCellTypeLi <- function(clf.data, score.info=NULL, aggr=T) {
   node <- split(clf.nodes$Node, clf.nodes$PathLen)
   family <- lapply(1:length(parent), function(n) split(node[[n]], parent[[n]])) %>% unlist(recursive=F)
   
-  scores <- lapply(family, function(n) scores[,n]%<>% normalizeScores())
+  scores <- lapply(family, function(n) scores[,n]%<>% normalizeScores()) # normlization: types under the same parent
   coln<- scores %>% sapply(colnames) %>% Reduce(c,.)
   scores %<>% as.data.frame 
   colnames(scores) <- coln

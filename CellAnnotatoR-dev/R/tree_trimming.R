@@ -469,9 +469,10 @@ treePruneSingleLayer <- function(p2, ann.by.level, ann.by.level.sub, layer, wei=
     ann.by.level.sub <- parent.no.pos.removed$ann.by.level.sub
     ann.by.level <- parent.no.pos.removed$ann.by.level
     
+    #Only cell types under the same grandparent are considered for St and its normalization
     markers.parents <- getMarkersForNextLayer(p2, ann.by.level.sub, layer.index)
     score.info <- getScore(ann.by.level.sub, markers.parents, cm.norm, layer.index)
-    score.info %<>% lapply(function(n) n$scores) %>% as.data.frame() %>% normalizeScores() #Normalize St# Here, the normalization is only based on the cell types that are considered at each layer, not all the cell types at each layer, therefore, the score will differ from the what we get from getMarkerScoresPerCellType(), where all the cell types from each layer are considered.
+    score.info %<>% lapply(function(n) n$scores) %>% as.data.frame() %>% normalizeScores() #Normalize St# Here, the normalization is only based on the cell types that share the same grandparent as the parent on focus, not all the cell types at each layer, therefore, the score will differ from the what we get from getMarkerScoresPerCellType(), where all the cell types from each layer are considered.
     score.info <- lapply(names(score.info)%>%setNames(.,.), function(n) {
       cells<-ann.by.level.sub[[layer.index+1]][ann.by.level.sub[[layer.index+1]]==n]%>%names;
       score.info[cells,n]}) %>% unlist
