@@ -222,20 +222,19 @@ treePruneSingleLayer <- function(p2, ann.by.level, ann.by.level.sub, layer, wei=
     ann.by.level.sub <- parent.no.pos.removed$ann.by.level.sub
     ann.by.level <- parent.no.pos.removed$ann.by.level
     
-    #Only cell types under the same grandparent are considered for St and its normalization
-    markers.parents <- getMarkersForNextLayer(p2, ann.by.level.sub, layer.index)
-    score.info <- getScore(ann.by.level.sub, markers.parents, cm.norm, layer.index)
-    score.info %<>% lapply(function(n) n$scores) %>% as.data.frame() %>% normalizeScores() #Normalize St# Here, the normalization is only based on the cell types that share the same grandparent as the parent on focus, not all the cell types at each layer, therefore, the score will differ from the what we get from getMarkerScoresPerCellType(), where all the cell types from each layer are considered.
+    markers.parents <- getMarkersForNextLayer(p2, ann.by.level, layer.index)
+    score.info <- getScore(ann.by.level, markers.parents, cm.norm, layer.index)
+    score.info %<>% lapply(function(n) n$scores) %>% as.data.frame() %>% normalizeScores() #Normalize St# Here, the normalization is based on all the cell types at each layer.
     score.info <- lapply(names(score.info)%>%setNames(.,.), function(n) {
-      cells<-ann.by.level.sub[[layer.index+1]][ann.by.level.sub[[layer.index+1]]==n]%>%names;
+      cells<-ann.by.level[[layer.index+1]][ann.by.level[[layer.index+1]]==n]%>%names;
       score.info[cells,n]}) %>% unlist
     
-    parent.types <- ann.by.level.sub[[layer.index+1]] %>% unique 
+    parent.types <- ann.by.level.sub[[layer.index+1]] %>% unique #WHAT ABOUT parent.types is empty
     #There will be as many markers.sub.replaced as the subtypes.
     for (parent in parent.types){
       if (!(parent %in% (ann.by.level[[ann.by.level %>% length()]] %>% unique))) { #sub not in the last layer
-        ann.by.level.replaced <- ann.by.level.sub #temporary replace, only replace the parent layer, not the others 
-        parent.cells <- ann.by.level.sub[[layer.index+1]] %>% .[.==parent] %>% names
+        ann.by.level.replaced <- ann.by.level #******
+        parent.cells <- ann.by.level[[layer.index+1]] %>% .[.==parent] %>% names
         ann.by.level.replaced[[layer.index+1]][parent.cells] <- ann.by.level.replaced[[layer.index+2]][parent.cells]
         message ("\nMarker secltion for the layer layer.index+1 with ", parent, " being replaced by its subtypes ...")
         markers.parent.replaced <- getMarkersForNextLayer(p2, ann.by.level.replaced, layer.index)
@@ -256,6 +255,7 @@ treePruneSingleLayer <- function(p2, ann.by.level, ann.by.level.sub, layer, wei=
     return(list(ann.by.level=ann.by.level, ann.by.level.sub=ann.by.level.sub, k=k))
   }
 }
+
 
 
 
@@ -384,13 +384,12 @@ getClfData <- function(p2, ann.by.level, name){
 
 
 
-reAnnoPip <- function(p2, ann.by.level, name){
-
-  clf.data <- getClfData <- function(p2, ann.by.level, name)
+reAnnoPip <- function(p2, ann.by.level, name, clf.data=NULL, uncertainty.thresholds=c(coverage=0.5, negative=0.5, positive=0.75)){
+  if (is.null(clf.data)){clf.data <- getClfData(p2, ann.by.level, name)}
   message("Re-annotation ...")
   ann.by.level <-
     assignCellsByScores(p2$graphs$PCA, clf.data,
-                        clusters = NULL) #we had clusters=p2$clusters$PCA$leiden, but lots of tip clusters dropped after re-annotation, therefore, I reset it to NULL.
+                        clusters = NULL, uncertainty.thresholds=uncertainty.thresholds) #we had clusters=p2$clusters$PCA$leiden, but lots of tip clusters dropped after re-annotation, therefore, I reset it to NULL.
   saveRDS(ann.by.level, paste0("~/CellAnnotatoR-dev/notebooks/12hclust_trimming/ann_by_level_", name, ".rds"))
   
   message("Checking the data ...")
@@ -403,3 +402,9 @@ reAnnoPip <- function(p2, ann.by.level, name){
   
   return(list(ann.by.level=ann.by.level, clf.data=clf.data))
 }
+
+
+
+plotUncertaintyPerClustByLevel <- function(cell.uncertainty.per.level, annotation.per.level, layer){
+  unc.per.clust <- scoreClusterUncertaintyPerLevel(cell.uncertainty.per.level, annotation.per.level[[layer]])
+  plotUncertaintyPerClust(unc.per.clust[[layer]], annotation.per.level[[layer]], n.col=3, text.angle=60)}
