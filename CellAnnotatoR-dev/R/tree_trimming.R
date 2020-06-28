@@ -209,7 +209,10 @@ getScore <- function(ann.by.level, marker.list, cm.norm, layer.index){
 }
 
 
-
+#In this version, the t-test is removed
+#When St (before replacement) < 0.25, St (after replacement) < St(before)+0.05: the replacement shouldn't be accepted.
+#When St (before) > 0.25, as long as St(after) >= S(before), the replacement is accepted
+#Here the St is normalized, and the normalization is based on the cell types under the same grandparents (the peers oof the parent on focus)
 treePruneSingleLayer <- function(p2, ann.by.level, ann.by.level.sub, layer, wei=1){
   k=0
   layer.index <- match(layer, names(ann.by.level))
@@ -245,10 +248,15 @@ treePruneSingleLayer <- function(p2, ann.by.level, ann.by.level.sub, layer, wei=
             cells<-ann.by.level.replaced[[layer.index+1]][ann.by.level.replaced[[layer.index+1]]==n]%>%names;
             score.info.replaced[cells,n]}) %>% unlist
           #Test and replace if necessary
-          if ((layer.index==1) && (sum(score.info)<0.75*sum(score.info.replaced))) {ann.by.level <- liftTree(parent, ann.by.level, layer.index); ann.by.level.sub <- liftTree(parent, ann.by.level.sub, layer.index); k <- k+1; score.info <- score.info.replaced} else {
-            #For the other layers:
-            t <- t.test(score.info, wei*score.info.replaced)
-            if ((layer.index>1) && (t$p.value<0.05) && (t$estimate[[1]]<t$estimate[[2]])) {ann.by.level <- liftTree(parent, ann.by.level, layer.index); ann.by.level.sub <- liftTree(parent, ann.by.level.sub, layer.index); k <- k+1; score.info <- score.info.replaced}} # For the rest of layers, wei=1
+          if ((layer.index==1) && (sum(score.info)<0.75*sum(score.info.replaced))) { #For layer 1
+            ann.by.level <- liftTree(parent, ann.by.level, layer.index); ann.by.level.sub <- 
+              liftTree(parent, ann.by.level.sub, layer.index); k <- k+1; score.info <- score.info.replaced} else if #For the other layers: 
+                ((layer.index>1) && (mean(score.info)<=0.25) && (mean(wei*score.info.replaced)>(mean(score.info)+0.05)) { # when mean(score.info <= 0.25)       
+              ann.by.level <- liftTree(parent, ann.by.level, layer.index); ann.by.level.sub <- 
+                liftTree(parent, ann.by.level.sub, layer.index); k <- k+1; score.info <- score.info.replaced} else if
+            ((layer.index>1) && ((mean(score.info)>0.25)) && (mean(score.info)<=mean(wei*score.info.replaced))  { # when mean(score.info >0.25)
+              ann.by.level <- liftTree(parent, ann.by.level, layer.index); ann.by.level.sub <-
+                liftTree(parent, ann.by.level.sub, layer.index); k <- k+1; score.info <- score.info.replaced}} # For the rest of layers, wei=1
         }
       }
     }
