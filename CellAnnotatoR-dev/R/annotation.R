@@ -310,7 +310,7 @@ normalizeScores <- function(scores, min.val=1e-10) {
 }
 
 #' Li: Return initial scores of each cell type for each cell
-#' Li: Here, the St nromalization is on all the cell types at each layer, not on cell types under the same parent.
+#' Li: In the old version, the St nromalization is on all the cell types at each layer, not on cell types under the same parent.
 #' Li: Now, the St nromalization is on all the cell types under the same parent.
 #' Li: @param score.info pre-calculated score info from `getMarkerScoreInfo`
 #' Li: @param aggr should individual gene scores be aggregated per cell type? If `FALSE`,
@@ -339,6 +339,6 @@ getMarkerScoresPerCellType <- function(clf.data, score.info=NULL, aggr=T) {
   coln<- scores %>% sapply(colnames) %>% Reduce(c,.)
   scores %<>% as.data.frame 
   colnames(scores) <- coln
-  
+
   return(scores)
 }
