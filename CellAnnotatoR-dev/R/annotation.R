@@ -342,3 +342,35 @@ getMarkerScoresPerCellType <- function(clf.data, score.info=NULL, aggr=T) {
 
   return(scores)
 }
+
+
+
+#' Extract Cell Type Probabilities
+#' @description Re-normalizes scores to estimate full probability for each cell to belong to a specific cell type
+#' @return data.frame of annotation probabilities with cell by rows and cell types by columns
+#' @export
+extractCellTypeProbs <- function(annotation.scores, clf.tree, ann.level=NULL) {
+  extractLevelProbs <- function(scores, tree, cur.node) {
+    sub.tree <- if (is.null(cur.node)) tree else tree[[cur.node]]
+    
+    if (is.null(names(sub.tree))) {
+      return(scores[sub.tree] / pmax(rowSums(scores[sub.tree]), 1e-5))
+    }
+    
+    if ((length(sub.tree) == 1)) {
+      return(extractLevelProbs(scores, sub.tree, names(sub.tree)[[1]]))
+    }
+    
+    if (is.null(sub.tree))
+      stop("Error: is.null(tree[[cur.node]]), ", cur.node)
+    
+    return(names(sub.tree) %>% setNames(., .) %>% lapply(function(n) as_tibble(extractLevelProbs(scores, sub.tree, n)) * scores[[n]]) %>% Reduce(cbind, .))
+  }
+  
+  probs <- extractLevelProbs(annotation.scores, classificationTreeToHierarhy(clf.tree, max.depth=ann.level), NULL) %>%
+    as.data.frame() %>% set_rownames(rownames(annotation.scores))
+  probs[probs < 1e-5] <- 0.0
+  probs <- probs / pmax(rowSums(probs), 1e-5)
+  probs[rowSums(probs) < 0.1,] <- 1 / ncol(probs)
+  return(probs)
+}
