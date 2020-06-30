@@ -343,8 +343,10 @@ getMarkerScoresPerCellType <- function(clf.data, score.info=NULL, aggr=T) {
   return(scores)
 }
 
-
-
+#' Li: The algorithm used here looks like HMM full probabilistic model (P(S,π|HMM,θ); S: an observed sequence, π: a state path, HMM with parameters θ, The probability P(S,π|HMM,θ) that an HMM with parameters θ generates a state path π and an observed sequence S is the product of all the emission probabilities and transition probabilities that were used). 
+#' 1) each branch/cell type chain/lineage = sequence (made of symbol, here symbol=cell type), 2) state=layer, 3) the emission probability at each state = the normalized St score for each cell type, however at each state, the set of emission probabilities will vary from lineage to lineage, because we normalize scores under parent types, rather than for the entire layer, which means that the kid type probabilities under the same parent will sum up to one, and the cell types from all other parents of the same layer will equal to 0.  4) the transition probability from one layer to the next is 1, self transition probability is 0.
+#' HMM (https://www.nature.com/articles/nbt1004-1315)
+#' Li: This is a hurrican script
 #' Extract Cell Type Probabilities
 #' @description Re-normalizes scores to estimate full probability for each cell to belong to a specific cell type
 #' @return data.frame of annotation probabilities with cell by rows and cell types by columns
