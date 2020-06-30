@@ -94,3 +94,10 @@ classificationTreeToHierarhy <- function(clf.tree, max.depth=NULL) {
   }
   hierarchy.df %$% setdiff(Node, Parent) %>% mergeAnnotationByLevels(clf.tree) %>% as_tibble() %>% splitDfByNextCol()
 }
+
+splitDfByNextCol <- function(df) {
+  if (ncol(df) == 1)
+    return(df[[1]])
+  
+  return(lapply(split(df[2:ncol(df)], df[[1]]), splitDfByNextCol))
+}
