@@ -139,8 +139,10 @@ getMarkersForNextLayer <- function(p2, ann.by.level, start.layer.index){
     
     marker.list <- setNames(marker.info, NULL) %>% unlist(recursive=F)
     
+    message("\ngetMarkersForNextLayer is finished!")
     return(marker.list)
   } else{
+    message("\ngetMarkersForNextLayer is finished!")
     return(NULL)
   }
 }
@@ -152,6 +154,7 @@ liftTree <- function(parent, ann.by.level, layer.index){
   cells.p <- ann.by.level[[layer.index+1]][ann.by.level[[layer.index+1]]==parent] %>% names 
   for (i in (layer.index+1):(depth-1)) {
     ann.by.level[[i]][cells.p] <- ann.by.level[[i+1]][cells.p]}
+  message("\nNow the liftTree is finished!")
   return(ann.by.level)
 }
 
@@ -159,23 +162,29 @@ liftTree <- function(parent, ann.by.level, layer.index){
 
 #remove the parent type at layer.index+1 if no marker identified for it, and then lift the entire related lineage up.
 removeParentNoPos <- function(p2, ann.by.level, ann.by.level.sub, layer.index){
+  message("\nGet markers for parents under the grandparent ", ann.by.level.sub[[layer.index]]%>%unique)
   markers.subtypes <- getMarkersForNextLayer(p2, ann.by.level.sub, layer.index) #what about the other un-considered parents have no markers?
   types.no.pos <- markers.subtypes[sapply(markers.subtypes, function(x) length(x$expressed) == 0)] %>% names()
+  message("\nThe cell types that have no positive markers are ", types.no.pos)
   parents.no.pos <- c()
   for (type in types.no.pos) {
     if (ann.by.level.sub[[layer.index+2]][ann.by.level.sub[[layer.index+1]]%>%.[.==type]%>%names]%>%unique%>%length>1) {
       parents.no.pos<-c(parents.no.pos, type)}}
+  message("\nParent types that have no positive markers are ", parents.no.pos)
   #remove the parent type at layer.index+1 if no marker identified for it, and then lift the entire related lineage up.
   while (length(parents.no.pos)>0){ 
-    for (parent in parents.no.pos) {ann.by.level.sub<-liftTree(parent, ann.by.level.sub, layer.index); ann.by.level<-liftTree(parent, ann.by.level, layer.index)}
+    for (parent in parents.no.pos) {message("The no-positive-marker parent to be removed is ", parent); ann.by.level.sub<-liftTree(parent, ann.by.level.sub, layer.index); ann.by.level<-liftTree(parent, ann.by.level, layer.index)}
+    message("\nAfter removed the no-positive-marker parent, now we need to get markers for the new parent layer")
     markers.subtypes <- getMarkersForNextLayer(p2, ann.by.level.sub, layer.index)
     types.no.pos <- markers.subtypes[sapply(markers.subtypes, function(x) length(x$expressed) == 0)] %>% names()
+    message("\nThe new cell types without positive marker are ", types.no.pos)
     parents.no.pos <- c()
     for (type in types.no.pos) {
       if (ann.by.level.sub[[layer.index+2]][ann.by.level.sub[[layer.index+1]]%>%.[.==type]%>%names]%>%unique%>%length>1) {
         parents.no.pos<-c(parents.no.pos, type)}}
+    message("\nThe new parents without positive marker are ", parents.no.pos)
   } 
-  
+  message("\nNow, the removeParentNoPos is finished!")
   return(list(ann.by.level=ann.by.level, ann.by.level.sub=ann.by.level.sub, markers.subtypes=markers.subtypes))
 }
 
@@ -204,7 +213,7 @@ getScore <- function(ann.by.level, marker.list, cm.norm, layer.index){
     score.info[[type]]$max.positive <- rep(0, length(cells.all)) %>% setNames(., cells.all)
     score.info[[type]]$scores <- rep(0, length(cells.all)) %>% setNames(., cells.all)
   }
-  
+  message("\ngetScore is finished!")
   return(score.info)
 }
 
@@ -216,48 +225,64 @@ getScore <- function(ann.by.level, marker.list, cm.norm, layer.index){
 treePruneSingleLayer <- function(p2, ann.by.level, ann.by.level.sub, layer, wei=1){
   k=0
   layer.index <- match(layer, names(ann.by.level))
-  if (ann.by.level.sub[[layer.index+1]]%>%unique%>%length==1) {return(list(ann.by.level=ann.by.level, k=0))} else {
+  message("\nThe current layer.index is ", layer.index)
+  if (ann.by.level.sub[[layer.index+1]]%>%unique%>%length==1) {return(list(ann.by.level=ann.by.level, ann.by.level.sub=ann.by.level.sub, k=0))} else { # can move else{}...
     depth <- names(ann.by.level)%>%length()  
     cm.norm <- p2$counts %>% Matrix::t() %>% normalizeTfIdfWithFeatures() 
     
     #remove the parent type at layer.index+1 if no marker identified for it, and then lift the entire related lineage up.
+    message("\nNow remove the parents that have no positive markers...")
     parent.no.pos.removed <- removeParentNoPos(p2, ann.by.level, ann.by.level.sub, layer.index)
     ann.by.level.sub <- parent.no.pos.removed$ann.by.level.sub
     ann.by.level <- parent.no.pos.removed$ann.by.level
+    message("\nGet markers for the parents under the grandparent type ", ann.by.level.sub[[layer.index]]%>%unique)
+    markers.parents <- parent.no.pos.removed$markers.subtypes
     
-    markers.parents <- getMarkersForNextLayer(p2, ann.by.level, layer.index)
-    score.info <- getScore(ann.by.level, markers.parents, cm.norm, layer.index)
-    score.info %<>% lapply(function(n) n$scores) %>% as.data.frame() %>% normalizeScores() #Normalize St# Here, the normalization is based on all the cell types at each layer.
+    #Only cell types under the same grandparent are considered for St and its normalization
+    #markers.parents <- getMarkersForNextLayer(p2, ann.by.level.sub, layer.index)
+    message("\nGet St scores for the parents under the grandparent type ", ann.by.level.sub[[layer.index]]%>%unique)
+    score.info <- getScore(ann.by.level.sub, markers.parents, cm.norm, layer.index)
+    message("\nNormalize the St scores for the parents under the grandparent type ", ann.by.level.sub[[layer.index]]%>%unique)
+    score.info %<>% lapply(function(n) n$scores) %>% as.data.frame() %>% normalizeScores() #Normalize St# Here, the normalization is only based on the cell types that share the same grandparent as the parent on focus, not all the cell types at each layer, therefore, the score will differ from the what we get from getMarkerScoresPerCellType(), where all the cell types from each layer are considered.
+    message("\nGet each cell's normalized St scores for the cell types that the cells are annotated with")
     score.info <- lapply(names(score.info)%>%setNames(.,.), function(n) {
-      cells<-ann.by.level[[layer.index+1]][ann.by.level[[layer.index+1]]==n]%>%names;
+      cells<-ann.by.level.sub[[layer.index+1]][ann.by.level.sub[[layer.index+1]]==n]%>%names;
       score.info[cells,n]}) %>% unlist
     
     parent.types <- ann.by.level.sub[[layer.index+1]] %>% unique #WHAT ABOUT parent.types is empty
+    message("\nThe parent types under the grandparent type ", ann.by.level.sub[[layer.index]]%>%unique, " are ", parent.types)
     #There will be as many markers.sub.replaced as the subtypes.
     for (parent in parent.types){
-      if (!(parent %in% (ann.by.level[[ann.by.level %>% length()]] %>% unique))) { #sub not in the last layer
-        ann.by.level.replaced <- ann.by.level #******
-        parent.cells <- ann.by.level[[layer.index+1]] %>% .[.==parent] %>% names
+      message("\nThe parent to be tested at this step is ", parent)
+      if (!(parent %in% (ann.by.level[[ann.by.level.sub %>% length()]] %>% unique))) { #sub not in the last layer
+        message("\nTemporarily replace the parent ", parent, " by its kids, so we can compare with that without this replacement...")
+        ann.by.level.replaced <- ann.by.level.sub #temporary replace, only replace the parent layer, not the others 
+        parent.cells <- ann.by.level.sub[[layer.index+1]] %>% .[.==parent] %>% names
         ann.by.level.replaced[[layer.index+1]][parent.cells] <- ann.by.level.replaced[[layer.index+2]][parent.cells]
-        message ("\nMarker secltion for the layer layer.index+1 with ", parent, " being replaced by its subtypes ...")
+        message ("\nMarker secltion for all types under the grandparent ", ann.by.level.sub[[layer.index]]%>%unique, " while the parent ", parent, " being replaced by its kids ...")
         markers.parent.replaced <- getMarkersForNextLayer(p2, ann.by.level.replaced, layer.index)
         if (sum(sapply(markers.parent.replaced, function(x) length(x$expressed) == 0))==0) { #*****''
+          message ("\nGet normalized St scores for all the types under the grandparent ", ann.by.level.sub[[layer.index]]%>%unique, " while the parent ", parent, " being replaced by its kids ...")
           score.info.replaced <- getScore(ann.by.level.replaced, markers.parent.replaced, cm.norm, layer.index)
           score.info.replaced %<>% lapply(function(n) n$scores) %>% as.data.frame() %>% normalizeScores()#Normalize St
           score.info.replaced <- lapply(names(score.info.replaced)%>%setNames(.,.), function(n) {
             cells<-ann.by.level.replaced[[layer.index+1]][ann.by.level.replaced[[layer.index+1]]==n]%>%names;
             score.info.replaced[cells,n]}) %>% unlist
-          #Test and replace if necessary
+          message("\nTest and replace if necessary")
+          message("\nIf the grandparent layer is the root...")
           if ((layer.index==1) && (sum(score.info)<0.75*sum(score.info.replaced))) { #For layer 1
             ann.by.level <- liftTree(parent, ann.by.level, layer.index); 
             ann.by.level.sub <- liftTree(parent, ann.by.level.sub, layer.index); 
             k <- k+1; score.info <- score.info.replaced} else if (layer.index>1){#For the other layers:
+                message("\nIf the grandparent is not the root...")
                 # when mean(score.info <= 0.25) 
-                 if (mean(score.info)<=0.25 && mean(wei*score.info.replaced)>(mean(score.info)+0.05)) {
+                 if (mean(score.info)<=0.25 && mean(score.info.replaced)>(mean(score.info)+0.05)) {
+                  message("\nNow we remove parent ", parent, " and lift up the part of the tree below it")
                   ann.by.level <- liftTree(parent, ann.by.level, layer.index); 
                   ann.by.level.sub <- liftTree(parent, ann.by.level.sub, layer.index); 
                   k <- k+1; score.info <- score.info.replaced} else if (
                     mean(score.info)>0.25 && mean(score.info)<=mean(wei*score.info.replaced))  { # when mean(score.info >0.25)
+                      message("\nNow we remove parent ", parent, " and lift up the part of the tree below it")
                       ann.by.level <- liftTree(parent, ann.by.level, layer.index); 
                       ann.by.level.sub <- liftTree(parent, ann.by.level.sub, layer.index); 
                       k <- k+1; score.info <- score.info.replaced}} # For the rest of layers, wei=1
@@ -272,15 +297,19 @@ treePruneSingleLayer <- function(p2, ann.by.level, ann.by.level.sub, layer, wei=
 
 
 treePrunesSingleLayer <- function(p2, ann.by.level, ann.by.level.sub, layer, wei=1){
+  message("\nNow we are starting to trim the grandparent type ", ann.by.level.sub[[layer]]%>%unique, "s family")
   ann.by.level <- treePruneSingleLayer(p2, ann.by.level, ann.by.level.sub, layer, wei)
   k <- ann.by.level$k
+  message("\nThe k is ", k)
   ann.by.level.sub <- ann.by.level$ann.by.level.sub
   ann.by.level <- ann.by.level$ann.by.level
   while (k>0){
+    message("\nBecause k>0, we need to rerun the trimming for the grandparent type ", ann.by.level.sub[[layer]]%>%unique)
     ann.by.level.2 <- treePruneSingleLayer(p2, ann.by.level, ann.by.level.sub, layer, wei)
     ann.by.level <- ann.by.level.2$ann.by.level
     ann.by.level.sub <- ann.by.level.2$ann.by.level.sub
     k = ann.by.level.2$k
+    message("\nThe k is ", k)
   }
   return(ann.by.level)
 }
@@ -294,13 +323,16 @@ treePrunes <- function(p2, ann.by.level, wei=1, start.layer.index=1) {
   
   tree.depth <- length(ann.by.level)
   for (layer in names(ann.by.level)[start.layer.index:(tree.depth-2)]) { #the LAYERS compared actually the two below the starting layer, not the starting layer and the one below it.
+    message("\nThe present layer is ", layer)
     layer.types <- ann.by.level[[layer]] %>% unique()
     for (type in layer.types) {
+      message("\nThe present grandparent cell type on focus is ", type, " at layer ", layer)
       type.cells <- ann.by.level[[layer]] %>% .[.==type] %>% names
       ann.by.level.sub <- list()
       for (i in 1:tree.depth){
         ann.by.level.sub[[names(ann.by.level[i])]] <- ann.by.level[[i]][type.cells]}
       ann.by.level <- treePrunesSingleLayer(p2, ann.by.level, ann.by.level.sub, layer, wei)
+      message("\nThe trimming for the grandparent ", type, " is now finished!")
     }
   }
   
