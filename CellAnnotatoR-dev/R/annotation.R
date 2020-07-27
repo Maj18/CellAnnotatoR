@@ -21,8 +21,8 @@ annotationFromScores <- function(scores, clusters=NULL) {
   if (!is.null(clusters))
     return(expandAnnotationToClusters(scores, clusters))
 
-  return(colnames(scores)[apply(scores, 1, which.max)] %>% setNames(rownames(scores)))
-}
+  return(colnames(scores)[apply(scores, 1, which.max)] %>% setNames(rownames(scores))) #apply(scores, 1, which.max): in the data.frame scores, for each row, which is the biggest one.
+} #For the two kids "l22_7"  "l24_18" under parent l13_7, all cells have been assigned tol24_18, that's why l22_7 was dropped! 
 
 #' Diffuse Score per Type
 #' @inheritDotParams diffuseGraph fading fading.const verbose tol score.fixing.threshold
@@ -70,6 +70,8 @@ diffuseGraph <- function(graph, scores, fading=10, fading.const=0.5, score.fixin
 }
 
 #' Assign Cells By Scores
+#' If we are only to reannoate one layer of a hierarchy, or the St_norm got over entire layer, we can still use this function.
+#' If we want to reannotate the entire hierarchy, the St_norm of which acquired under the same parents, then this funciton is NOT PROPER ANYMORE.
 #' @description Assign cell types for each cell based on type scores. Optionally uses `clusters` to expand annotation.
 #'
 #' @param graph cell graph from Seurat, Pagoda2 or some other tool. Can be either in igraph or adjacency matrix format.
@@ -89,9 +91,9 @@ diffuseGraph <- function(graph, scores, fading=10, fading.const=0.5, score.fixin
 #' @examples
 #'   clf_data <- getClassificationData(cm, marker_path)
 #'   ann_by_level <- assignCellsByScores(graph, clf_data, clusters=clusters)
-#'
+#'   Li: set default coverage=0.93, rather than 0.5, this can make sure min(St)=0.1$$$$$$$$$$$$$$$$$$ 
 #' @export
-assignCellsByScores <- function(graph, clf.data, score.info=NULL, clusters=NULL, verbose=0, uncertainty.thresholds=c(coverage=0.5, negative=0.5, positive=0.75), max.depth=NULL, ...) {
+assignCellsByScores <- function(graph, clf.data, score.info=NULL, clusters=NULL, verbose=0, uncertainty.thresholds=c(coverage=0.93, negative=0.5, positive=0.75), max.depth=NULL, ...) { #What this function does, is to compare the normalized St scores among the kid clusters under the same parent, and for each cell the kid with the highest score will be assigned to that cells, that is how re-annotation will be down, and filtering is completely based on the uncertainty threshold given, if larger, then ti will be turned own (NA). The recommended threshold for coverage is 0.93 that corresponds to a St of 0.1 (non-normalized), which we assume to be minimum to be considered as the cell expressing the marker genes.
   if (!is.null(clusters)) {
     clusters <- as.factor(clusters)
   }
@@ -100,7 +102,7 @@ assignCellsByScores <- function(graph, clf.data, score.info=NULL, clusters=NULL,
     score.info <- getMarkerScoreInfo(clf.data)
   }
 
-  scores <- getMarkerScoresPerCellType(clf.data, score.info=score.info)
+  scores <- getMarkerScoresPerCellType(clf.data, score.info=score.info) #here, St are normalzed under parents #len=90
   if (!is.null(graph)) {
     if ((is(graph, "Matrix") || is(graph, "matrix")) && ncol(graph) == nrow(graph)) {
       graph <- igraph::graph_from_adjacency_matrix(graph, weighted=T)
@@ -118,8 +120,8 @@ assignCellsByScores <- function(graph, clf.data, score.info=NULL, clusters=NULL,
     }
   }
 
-  subtypes.per.depth.level <- classificationTreeToDf(clf.data$classification.tree) %$%
-    split(., PathLen) %>% lapply(function(df) split(df$Node, df$Parent)) %>% .[order(names(.))]
+  subtypes.per.depth.level <- classificationTreeToDf(clf.data$classification.tree) %$% #len=90
+    split(., PathLen) %>% lapply(function(df) split(df$Node, df$Parent)) %>% .[order(names(.))] #Parent-kid relationship
 
   max.depth <- if (is.null(max.depth)) length(subtypes.per.depth.level) else min(max.depth, length(subtypes.per.depth.level))
   c.ann <- rep("root", nrow(scores)) %>% setNames(rownames(scores))
@@ -133,12 +135,12 @@ assignCellsByScores <- function(graph, clf.data, score.info=NULL, clusters=NULL,
   for (pl in 1:max.depth) {
     if (verbose > 0) message("Level ", pl, "...")
 
-    c.subtypes.per.parent <- subtypes.per.depth.level[[pl]]
-    possible.ann.levels %<>% c(unlist(c.subtypes.per.parent)) %>% unique()
+    c.subtypes.per.parent <- subtypes.per.depth.level[[pl]] #parent-kids
+    possible.ann.levels %<>% c(unlist(c.subtypes.per.parent)) %>% unique() #kid types
 
     c.parents <- names(c.subtypes.per.parent) %>% setNames(., .)
-    cbs.per.type <- lapply(c.parents, function(p) names(c.ann)[c.ann == p]) %>%
-      .[sapply(., length) > 0]
+    cbs.per.type <- lapply(c.parents, function(p) names(c.ann)[c.ann == p]) %>% #c.ann comes from the last cycle, so the annotation has been updated cycle by cycle, however the scores remains the same for the original tree, don't we need to update the score as well?
+      .[sapply(., length) > 0] #all cells for each type at this level
 
     if (length(cbs.per.type) == 0) # some subtypes have deeper level of annotation, but non of them is found in the dataset
       break
@@ -146,7 +148,7 @@ assignCellsByScores <- function(graph, clf.data, score.info=NULL, clusters=NULL,
     c.parents %<>% .[names(cbs.per.type)]
 
     scores.per.type <- lapply(c.parents, function(p) scores[cbs.per.type[[p]], c.subtypes.per.parent[[p]], drop=F])
-
+#scores is a dataframe, and there is no "root", therefore we use the kids to locate it. Here we get scores per type, the cells are also right.
     if (!is.null(graph)) {
       scores.per.type %<>% diffuseScorePerType(graph, c.parents, cbs.per.type, verbose=(verbose > 1), ...)
 
@@ -154,10 +156,17 @@ assignCellsByScores <- function(graph, clf.data, score.info=NULL, clusters=NULL,
         scores.posterior[rownames(cs), colnames(cs)] <- cs
       }
     }
-
-    res.ann <- lapply(scores.per.type, annotationFromScores, clusters) %>% Reduce(c, .)
+    #Here, the name of scores.per.type is still "root", but the scores shown are for it's kids
+    res.ann <- lapply(scores.per.type, annotationFromScores, clusters) %>% Reduce(c, .) #this is an important step, here we use St to reannotate the cells: which kid cluster each cell belongs to $$$$$$$$$$$$$$$$$$$$$$$$$$$$$ #HERE, THE CELL TYPES DROPPED?????
+    #For the two kids "l22_7"  "l24_18" under parent l13_7, all cells have been assigned tol24_18, that's why l22_7 was dropped! 
     res.ann.filt <- filterAnnotationByUncertainty(res.ann, scores.posterior[,possible.ann.levels], score.info=score.info,
                                                   cur.types=unique(res.ann), clusters=clusters, thresholds=uncertainty.thresholds)
+    #Here, we have quality check.
+    #scores.posterior[,possible.ann.levels]: The kids' St scores (normalized)
+    #score.info=score.info: the St (not normalized), Sp, Sn scores
+    #cur.types: the kid types
+    #res.ann: all cells (could be less, depends on what parent type is)
+    #scores: each type has all cells, haven't withdrawed cells for types.
 
     c.ann[names(res.ann)] <- res.ann
     c.ann.filt[names(res.ann.filt)] %<>% is.na() %>% ifelse(NA, res.ann.filt)
@@ -165,7 +174,7 @@ assignCellsByScores <- function(graph, clf.data, score.info=NULL, clusters=NULL,
     level.name <- paste0("l", pl)
     ann.by.level[[level.name]] <- c.ann
     ann.filt.by.level[[level.name]] <- c.ann.filt
-    scores.by.level[[level.name]] <- scores.posterior[,possible.ann.levels]
+    scores.by.level[[level.name]] <- scores.posterior[,possible.ann.levels] #Those are the normalized scores
     if (verbose > 0) message("Done")
   }
 
@@ -183,17 +192,17 @@ assignCellsByScores <- function(graph, clf.data, score.info=NULL, clusters=NULL,
 #' @inheritParams getClassificationData
 #'
 #' @export
-normalizeTCWithFeatures <- function(cm, max.quantile=0.95, max.smooth=1e-10, transpose=T) {
+normalizeTCWithFeatures.ORIG <- function(cm, max.quantile=0.95, max.smooth=1e-10, transpose=T) {
   cm %<>% as("dgCMatrix") %>% Matrix::drop0()
 
-  # Total count normalization (i.e. TF-step)
+  # Total count normalization (i.e. TF-step) (divided by all genes' expression sum within a cell)
   cm@x <- cm@x / rep(Matrix::colSums(cm), diff(cm@p))
-  cm <- Matrix::t(cm)
+  cm <- Matrix::t(cm) #Now rows become cells, col becomes genes
 
   # Factors for min-max gene normalization
-  max.vals <- split(cm@x, rep(1:(length(cm@p)-1), diff(cm@p)))[paste0(1:ncol(cm))]
+  max.vals <- split(cm@x, rep(1:(length(cm@p)-1), diff(cm@p)))[paste0(1:ncol(cm))] # a list of vectors, each vector is for a gene, vector lengths differ between genes.
   max.vals[is.null(max.vals)] <- c()
-  max.vals %<>% sapply(quantile, max.quantile) %>% `+`(max.smooth) # Robust alternative to maximum
+  max.vals %<>% sapply(quantile, max.quantile) %>% `+`(max.smooth) # Robust alternative to maximum #The 95% quantile of all non-0 values/expressions for each gene. #maximum could be an outlier.
 
   cm@x <- cm@x / rep(max.vals, diff(cm@p)) # fast way to do columnwise normalization for sparse matrices
   cm@x %<>% pmin(1.0)
@@ -209,10 +218,10 @@ normalizeTCWithFeatures <- function(cm, max.quantile=0.95, max.smooth=1e-10, tra
 #' @inheritDotParams normalizeTCWithFeatures max.quantile max.smooth
 #'
 #' @export
-normalizeTfIdfWithFeatures <- function(cm, ...) {
-  tf.idf <- normalizeTCWithFeatures(cm, transpose=F, ...)
+normalizeTfIdfWithFeatures.ORIG <- function(cm, ...) {
+  tf.idf <- normalizeTCWithFeatures.ORIG(cm, transpose=F, ...) #HERE .ORIG IS ADDED
   # IDF-factors: log(1 + fraction of expressing cells)
-  idf.weights <- log(1 + nrow(tf.idf) / (Matrix::colSums(tf.idf > 0) + 1))
+  idf.weights <- log(1 + nrow(tf.idf) / (Matrix::colSums(tf.idf > 0) + 1)) #row: cells, col: genes
   tf.idf@x <- tf.idf@x * rep(idf.weights, diff(tf.idf@p))
   return(Matrix::t(tf.idf))
 }
@@ -272,28 +281,28 @@ mergeAnnotationInfos <- function(ann.infos) {
 #'   \item{max.positive: maximal expression of positive markers. Used for estimation of negative scores}
 #'   \item{scores: final scores. Equal to `scores * score.mult`}
 #' }
-getCellTypeScoreInfo <- function(markers, tf.idf, aggr=T) {
+getCellTypeScoreInfo <- function(markers, tf.idf, aggr=T) { 
   expressed.genes <- intersect(markers$expressed, colnames(tf.idf))
   if (length(expressed.genes) == 0) {
     if (aggr) {
-      scores <- setNames(rep(0, nrow(tf.idf)), rownames(tf.idf))
+      scores <- setNames(rep(0, nrow(tf.idf)), rownames(tf.idf)) #row: cells # give each cell a score of 0
     } else {
-      scores <- matrix(0, nrow=nrow(tf.idf), ncol=0, dimnames=list(rownames(tf.idf), character()))
+      scores <- matrix(0, nrow=nrow(tf.idf), ncol=0, dimnames=list(rownames(tf.idf), character())) #Here it is an empty matrix, only has row (cell) names.
     }
 
-    max.positive.expr <- setNames(rep(0, nrow(tf.idf)), rownames(tf.idf))
-  } else {
+    max.positive.expr <- setNames(rep(0, nrow(tf.idf)), rownames(tf.idf)) #now the same as the scores above, a list of cells, each cell has a score of 0
+  } else { #marker gene is not empty
     c.submat <- tf.idf[, expressed.genes, drop=F]
-    c.submat.t <- Matrix::t(c.submat)
+    c.submat.t <- Matrix::t(c.submat) #here, row becomes genes and col becomes cells
     scores <- if (aggr) Matrix::colSums(c.submat.t) else c.submat
-    max.positive.expr <- apply(c.submat.t, 2, max)
+    max.positive.expr <- apply(c.submat.t, 2, max) #col max, for a given cell, which positive marker has max tf.idf?
   }
 
   not.expressed.genes <- intersect(markers$not_expressed, colnames(tf.idf))
   if (length(not.expressed.genes) == 0) {
-    score.mult <- setNames(rep(1, nrow(tf.idf)), rownames(tf.idf))
+    score.mult <- setNames(rep(1, nrow(tf.idf)), rownames(tf.idf)) #No need to consider aggr?
   } else {
-    max.negative.expr <- apply(tf.idf[, not.expressed.genes, drop=F], 1, max)
+    max.negative.expr <- apply(tf.idf[, not.expressed.genes, drop=F], 1, max) #For a given cell, which negative marker has the max tf.idf?
     # max.negative.expr <- sparseRowMax(tf.idf[, not.expressed.genes, drop=F])
     score.mult <- pmax(max.positive.expr - max.negative.expr, 0) / max.positive.expr
     score.mult[is.na(score.mult)] <- 0
@@ -319,7 +328,7 @@ normalizeScores <- function(scores, min.val=1e-10) {
 #' @inheritParams getMarkerScoreInfo
 #' @return data.frame with rows corresponding to cells and columns corresponding to cell types.
 #'   Values are cell type scores, normalized per level of hierarchy
-getMarkerScoresPerCellType <- function(clf.data, score.info=NULL, aggr=T) {
+getMarkerScoresPerCellType <- function(clf.data, score.info=NULL, aggr=T, underParent=T) {
   if (is.null(score.info)) {
     score.info <- getMarkerScoreInfo(clf.data, aggr=aggr)
   }
@@ -331,14 +340,19 @@ getMarkerScoresPerCellType <- function(clf.data, score.info=NULL, aggr=T) {
   clf.nodes <- classificationTreeToDf(clf.data$classification.tree)
   scores %<>% as.data.frame(optional=T)
   
-  parent <- split(clf.nodes$Parent, clf.nodes$PathLen)
-  node <- split(clf.nodes$Node, clf.nodes$PathLen)
-  family <- lapply(1:length(parent), function(n) split(node[[n]], parent[[n]])) %>% unlist(recursive=F)
-  
-  scores <- lapply(family, function(n) scores[,n]%<>% normalizeScores()) # normlization: types under the same parent
-  coln<- scores %>% sapply(colnames) %>% Reduce(c,.)
-  scores %<>% as.data.frame 
-  colnames(scores) <- coln
+  if (underParent) {
+    parent <- split(clf.nodes$Parent, clf.nodes$PathLen)
+    node <- split(clf.nodes$Node, clf.nodes$PathLen)
+    family <- lapply(1:length(parent), function(n) split(node[[n]], parent[[n]])) %>% unlist(recursive=F)
+    
+    scores <- lapply(family, function(n) scores[,n]%<>% normalizeScores()) # Li: normlization: types under the same parent
+    coln<- scores %>% sapply(colnames) %>% Reduce(c,.)
+    scores %<>% as.data.frame 
+    colnames(scores) <- coln
+  } else{
+    for (nodes in split(clf.nodes$Node, clf.nodes$PathLen)) {
+      scores[, nodes]  %<>% normalizeScores()}
+  }
 
   return(scores)
 }
