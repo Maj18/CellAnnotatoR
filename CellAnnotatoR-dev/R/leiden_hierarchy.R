@@ -145,10 +145,13 @@ getNextLayerKnnClusters <- function(p2, annotation, out.name, outfile.path, min.
   marker.list <- list()
   resol.last.layer <- list()
   for (cl in names(ann.by.cluster)){
-    message("Now we will get next layer for ", cl)
+    message("Now we will get next layer for ", ann.by.cluster[cl][[1]]%>%names)
+    #sub <- igraph::induced_subgraph(p2$graphs$PCA, ann.by.cluster[cl][[1]]%>%names) #Split the graph
+    #igraph::V(sub)  # Show information about the graph
+    #clusters <- conos::leiden.community(sub, resolution=max.res.middle, n.iterations=10) #Build clusters based on the split graph
     p <- vpscutils::GetPagoda(p2$misc$rawCounts[ann.by.cluster[cl][[1]]%>%names,]%>%Matrix::t(), clustering.type=clustering.type, embeding.type=embeding.type)
     p$getKnnClusters(type="PCA", method=conos::leiden.community, resolution=max.res.middle, n.iterations=10, name="leiden")
-    reann <- reAnnoPip(p, list(l=p$clusters$PCA$leiden), out.name, outfile.path, graph=graph, clf.data= clf.data, uncertainty.thresholds=uncertainty.thresholds)
+    reann <- reAnnoPip(p, list(l=clusters$membership), out.name, outfile.path, graph=graph, clf.data= clf.data, uncertainty.thresholds=uncertainty.thresholds)
    
     if (!is.null(reann)){
       sp <- selfProjQCperCluster(p$clusters$PCA$leiden, reann$ann.by.level$annotation$l1)
@@ -256,7 +259,6 @@ findBiggestRes <- function(p, out.name, outfile.path, reann, reann.old=reann, re
   } else {return(list(p=p, reann=reann, reann.old=reann.old, res.left=res.left, res.left.old=res.left.old, res.right=res.right))}
 }     
   
-    
 
 #Get the leiden clustring based hierarchy:
 #At the same time, we will also do re-annotation, so the outcome will be a ready hierarchy with re-annotation based on the selected markers
