@@ -341,40 +341,35 @@ tfIdfOnType7 <- function(p2, ann.by.level, clf.data=NULL, topgene=10){
 }
 
 
-
-
-
-
-
-
 #This version also prefer bigger clusters, THIS IS NOT TRUE, IF WE TAKE CLUSTER SIZE INTO CONSIDERATION
 #This one is the best function so far (theoretically), works kind of fine as well
 tfIdfOnType6 <- function(p2, ann.by.level, clf.data=NULL, topgene=10){
   #Mean gene expression per cell type for each gene:
-  cm <- p2$counts
-  cm %<>% as("dgCMatrix") %>% Matrix::t()
+  cm <- p2$counts # col: genes, row: cells
+  cm %<>% as("dgCMatrix") %>% Matrix::t() # row: genes, col: cells
 
-  # Get tf (Nij/sum within cells)
-  tf <- cm
-  tf@x <- tf@x / rep(Matrix::colSums(tf), diff(tf@p))
-  tf <- Matrix::t(tf)
+  # Get tf (Nij/sum of all genes within cells)
+  tf <- cm  #row: genes, col: cells
+  tf@x <- tf@x / rep(Matrix::colSums(tf), diff(tf@p)) 
+  #tf <- Matrix::t(tf) #row: cells, col: genes
 
   #Normalize the counts further, so that the counts mean for each gene among all cells are at the same scale as (slightly bigger than) the total number of cells/cell types.
-  cm  %>% Matrix::t()
-  max.vals <- split(cm@x, rep(1:(length(cm@p)-1), diff(cm@p)))[paste0(1:ncol(cm))]
-  max.vals[is.null(max.vals)] <- c()
-  max.vals %<>% sapply(quantile, 0.95) %>% `+`(1e-10) #this is to ensure he counts sum for each gene among all cells are at the same scale as the total number of cells/cell types
+  #cm  %>% Matrix::t() 
+  max.vals <- split(cm@x, rep(1:(length(cm@p)-1), diff(cm@p)))[paste0(1:ncol(cm))] # a list of cells, each cell is represented by a vector of values
+  max.vals[is.null(max.vals)] <- c()  #remove 0
+  max.vals %<>% sapply(quantile, 0.95) %>% `+`(1e-10) #this is to ensure he count sum for each gene among all cells are at the same scale as the total number of cells/cell types # quantile, for each col (gene), 0.95 quantile of all the cells (row) for one gene (col). (here, almost the max becomes 1, and other cells becomes proportion to this max cell)
+  #Later, we will take the mean among all cells belonging to each type: then row: cell type, col: gene; nrow: the number of cell types, so the colsum (for a gene) of these type means will never exceed the number of types.€€€€€€€€€€€€€€€€€€€€
   cm@x <- cm@x / rep(max.vals, diff(cm@p))
-  cm %<>% Matrix::t()
+  cm %<>% Matrix::t()  #col: genes; row: cells.
   #ann.per.type.by.level <- ann.by.level@annotation %>% lapply(function(n) split(n,n)) 
   ann.per.type.by.level <- ann.by.level %>% lapply(function(n) split(n,n)) %>% lapply(function(m) m[lapply(m, length)>1]) # a list of hierarchial levels (e.g. l1, l2, l3; each level has its own cell types and each type has all the cells [names] that belong to it)
-  tf <- lapply(ann.per.type.by.level, function(m) lapply(m, function(n) as.matrix(tf)[intersect(names(n), rownames(tf)),] %>% colMeans)) %>% lapply(function(x) as.data.frame(x)) #For tf #divide tf into levels
+  tf <- lapply(ann.per.type.by.level, function(m) lapply(m, function(n) as.matrix(tf)[intersect(names(n), rownames(tf)),] %>% colMeans)) %>% lapply(function(x) as.data.frame(x)) #For tf #divide tf into levels  #Here, each cell type at one layer got a mean***** (among all cells belonging to that type) tf value for each gene. #At each layer, there is a dataframe: row: genes, col: cell types
 
-  mean.GE.per.type.per.gene <- lapply(ann.per.type.by.level, function(m) lapply(m, function(n) as.matrix(cm)[intersect(names(n), rownames(cm)),] %>% colMeans)) %>% # For the further normalzed counts #GE: gene expression # m: hierarchical level, n: cell type. Here we get the mean gene expression levels of the cells that belong to each cell type for each gene.
-    lapply(function(x) as.data.frame(x)) # list of 3 levels, each level has a dataframe, row: genes, col: cell types?
+  mean.GE.per.type.per.gene <- lapply(ann.per.type.by.level, function(m) lapply(m, function(n) as.matrix(cm)[intersect(names(n), rownames(cm)),] %>% colMeans)) %>% # For the further normalzed counts #GE: gene expression # m: hierarchical level, n: cell type. Here we get the mean**** gene expression levels of the cells that belong to each cell type for each gene. cm, row: cells, col: genes 
+    lapply(function(x) as.data.frame(x)) # list of 3 levels, each level has a dataframe, row: cells, col: cell types, value: mean of cells within type
 
   rowsum <- mean.GE.per.type.per.gene %>% lapply(function(n) rep(rowSums(n), ncol(n))%>%matrix(nrow=nrow(n), ncol=ncol(n), byrow=F))
-
+  #see €€€€€€€€€€€€€€€€€€€€€ above # sum (never exceed 1) of mean normalized (/max cell or tf for that gene) tfs per type for each gene, row:genes
   tfidf.per.type.per.gene <- list()
   p <- 1e-10 #pseudonumber
   for (i in names(mean.GE.per.type.per.gene)) { #i: hierarchical level
