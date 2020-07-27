@@ -151,12 +151,12 @@ createClassificationTree <- function(marker.list) {
 #'
 #' @param cm gene count matrix with cells by columns and genes by rows. May be in raw, TC-normalized or tf-idf-normalized format (in case of tf-idf, `prenormalized` must be set to `T`)
 #' @param markers path to the file with marker genes or parsed marker list from `parseMarkerFile` function
-#' @param prenormalized is `cm` in tf-idf-normalized format? Default: FALSE.
+
 #' @export
-getClassificationData <- function(cm, markers, prenormalized=F, data.gene.id.type="SYMBOL", marker.gene.id.type="SYMBOL", db=NULL, verbose=F) {
-  if (!prenormalized) {
-    cm %<>% normalizeTfIdfWithFeatures()
-  }
+getClassificationData <- function(cm, markers, data.gene.id.type="SYMBOL", marker.gene.id.type="SYMBOL", db=NULL, verbose=F) { #removed prenormalized=F, 
+  # if (!prenormalized) {
+  #   cm <- cm #%<>% normalizeTfIdfWithFeatures()
+  # }
 
   gi <- unifyGeneIds(cm, data.gene.id.type=data.gene.id.type, marker.gene.id.type=marker.gene.id.type, db=db, verbose=verbose)
 
