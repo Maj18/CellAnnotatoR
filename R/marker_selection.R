@@ -1,49 +1,9 @@
-prepareMarkerScoringInfo <- function(score.infos) {
-  return(list(
-    sum.scores=sapply(score.infos, `[[`, "scores") %>% rowSums(),
-    pos.scores=sapply(score.infos, `[[`, "scores.raw"),
-    neg.scores=1 - sapply(score.infos, `[[`, "mult"), # mult: only the second part of S(neg)?8
-    max.pos.scores=sapply(score.infos, `[[`, "max.positive")
-  ))
-}
-
-initializeMarkerList <- function(pos.markers.per.type, cm.norm, annotation, debug=F) {
-  marker.list <- lapply(pos.markers.per.type, function(x) list(expressed=c(), not_expressed=c()))
-  subtypes.left <- names(pos.markers.per.type) #types—>subtypes: names
-  for (i in 1:length(subtypes.left)) {
-    s.info <- lapply(marker.list, getCellTypeScoreInfo, cm.norm) %>% prepareMarkerScoringInfo()
-
-    marker.score <- subtypes.left %>% lapply(function(ct) #what is marker.score????
-      estimatePositiveMarkerScoreChange(ct, annotation, cm.norm, pos.markers.per.type[[ct]], s.info$pos.scores,
-                                        s.info$neg.scores, s.info$sum.scores, balance.cell.types=F)
-    ) %>% Reduce(rbind, .) %>% .[which.max(.$Score),]
-
-    if (marker.score$Score < 0) {
-      marker.score <- subtypes.left %>% lapply(function(ct)
-        estimatePositiveMarkerScoreChange(ct, annotation, cm.norm, pos.markers.per.type[[ct]], s.info$pos.scores,
-                                          s.info$neg.scores, s.info$sum.scores)
-      ) %>% Reduce(rbind, .) %>% .[which.max(.$Score),]
-
-      if (marker.score$Score < 0) {
-        warning("Negative score for ", marker.score$Type, ": ", round(marker.score$Score, 4), ". Consider extending marker list.\n")
-      }
-    }
-
-    marker.list[[c(marker.score$Type, marker.score$MT)]] %<>% c(marker.score$Gene)
-    subtypes.left %<>% setdiff(marker.score$Type)
-
-    if (debug) print(marker.score)
-  }
-
-  return(marker.list)
-}
-
 #' Aggregate Score Change per Gene
-#' @description Aggregates score change over all types. Either average (`balance.cell.types=T`)
+#' @description Aggregates score chage over all type. Either average (`balance.cell.types=T`)
 #' or sum (`balance.cell.types=F`) it per cell type and returns sum of signed scores
 aggregateScoreChangePerGene <- function(d.scores, annotation, marker.type, cell.type, target.type=NULL, balance.cell.types=T, self.mult=1) {
-  aggr.func <- if (balance.cell.types) Matrix::colMeans else Matrix::colSums #
-
+  aggr.func <- if (balance.cell.types) Matrix::colMeans else Matrix::colSums
+  
   cids.per.type <- names(annotation) %>% match(rownames(d.scores)) %>% split(annotation)
   scores.per.type <- cids.per.type %>%
     lapply(function(cids) aggr.func(d.scores[cids,, drop=F])) %>%
@@ -58,29 +18,27 @@ aggregateScoreChangePerGene <- function(d.scores, annotation, marker.type, cell.
   if (!is.null(target.type)) {
     res$ScoreTarget <- scores.per.type[res$Gene, target.type]
   }
-
+  
   return(res)
 }
 
-#What does this funciton do? What are all those parameters about?
-#The score changes if one adds/removes one or more positive scores
-#maybe here pos.scores, neg.scores and sum.scores are scores before the change???
+#' @description For each marker candidate it estimate change in positive scores comparing to the current marker
 estimatePositiveMarkerScoreChange <- function(cell.type, annotation, cm.norm, de.genes, pos.scores, neg.scores, sum.scores, aggr=T, ...) {
   if (length(de.genes) == 0)
     stop("de.genes are empty for ", cell.type)
-
-  sum.scores %<>% pmax(1e-30) # the element of sum.scores and 1e-30, which is bigger. What is sum.scores?
-
-  c.exprs <- as.matrix(cm.norm[, de.genes, drop=F]) #take the TF-IDF values only for the de.genes #here this cm.norm has genes in column
-
-  c.neg.scores <- (1 - neg.scores[, cell.type]) #  max(TF-IDFneg)/max(TF-IDFpos)????
-  c.pos.scores <- pos.scores[, cell.type] * c.neg.scores #for the intersect of each cell and cell type, calcualting S(t)????
-  ds <- c.exprs * c.neg.scores #for each grid, TF-IDF value* S(neg)
-  ds <- (ds + c.pos.scores) / (ds + sum.scores) - (c.pos.scores / sum.scores) #what does ds mean?
-
+  
+  sum.scores %<>% pmax(1e-30)
+  
+  c.exprs <- as.matrix(cm.norm[, de.genes, drop=F])
+  
+  c.neg.scores <- (1 - neg.scores[, cell.type])
+  c.pos.scores <- pos.scores[, cell.type] * c.neg.scores
+  ds <- c.exprs * c.neg.scores
+  ds <- (ds + c.pos.scores) / (ds + sum.scores) - (c.pos.scores / sum.scores)
+  
   if (!aggr)
     return(ds)
-
+  
   return(aggregateScoreChangePerGene(ds, annotation, marker.type="expressed", cell.type=cell.type, ...))
 }
 
@@ -88,35 +46,74 @@ estimateNegativeMarkerScoreChange <- function(cell.type, annotation, cm.norm, de
                                               sum.scores, max.pos.scores, max.neg.score.per.pos.type=0.1, aggr=T, ...) {
   if (length(de.genes) == 0)
     stop("de.genes are empty for ", cell.type)
-
+  
   sum.scores %<>% pmax(1e-30)
-  max.pos.scores <- pmax(max.pos.scores[,cell.type], 1e-30) #max.pos.scores among genes??
+  max.pos.scores <- pmax(max.pos.scores[,cell.type], 1e-30)
   mask <- (annotation == cell.type)
-  pos.ids <- which(mask) #pos.id: marker id??
+  pos.ids <- which(mask)
   neg.ids <- which(!mask)
-
+  
   c.exprs <- as.matrix(cm.norm[, de.genes, drop=F])
-
+  
   c.pos.scores <- pos.scores[,cell.type]
   c.pos.scores[pos.ids] <- sum.scores[pos.ids] # In ideal world, all positive score for a cell came from the proper cell type
-
+  
   new.neg.scores <- estimateNewNegativeScores(c.exprs, max.pos.scores, neg.scores[,cell.type]) %>%
     `dimnames<-`(dimnames(c.exprs))
-
+  
   old.scores <- c.pos.scores * (1 - neg.scores[,cell.type])
-  ds <- (c.pos.scores * (1 - new.neg.scores) - old.scores) # this makes sense!
-
+  ds <- (c.pos.scores * (1 - new.neg.scores) - old.scores)
+  
   new.scores <- c.pos.scores * (1 - new.neg.scores)
   ds <- new.scores / pmax(sum.scores + new.scores - old.scores, 1e-30) - (old.scores / pmax(sum.scores, 1e-30))
-
+  
   if (!aggr)
     return(ds)
-
-  res <- aggregateScoreChangePerGene(ds, annotation, marker.type="not_expressed", cell.type=cell.type, ...) #????
-  res$Score[Matrix::colMeans(new.neg.scores[pos.ids, res$Gene]) > max.neg.score.per.pos.type] <- -Inf #????
+  
+  res <- aggregateScoreChangePerGene(ds, annotation, marker.type="not_expressed", cell.type=cell.type, ...)
+  res$Score[Matrix::colMeans(new.neg.scores[pos.ids, res$Gene]) > max.neg.score.per.pos.type] <- -Inf
   return(res)
 }
 
+prepareMarkerScoringInfo <- function(score.infos) {
+  return(list(
+    sum.scores=sapply(score.infos, `[[`, "scores") %>% rowSums(),
+    pos.scores=sapply(score.infos, `[[`, "scores.raw"),
+    neg.scores=1 - sapply(score.infos, `[[`, "mult"),
+    max.pos.scores=sapply(score.infos, `[[`, "max.positive")
+  ))
+}
+
+initializeMarkerList <- function(pos.markers.per.type, cm.norm, annotation, debug=F) {
+  marker.list <- lapply(pos.markers.per.type, function(x) list(expressed=c(), not_expressed=c()))
+  subtypes.left <- names(pos.markers.per.type)
+  for (i in 1:length(subtypes.left)) {
+    s.info <- lapply(marker.list, getCellTypeScoreInfo, cm.norm) %>% prepareMarkerScoringInfo()
+    
+    marker.score <- subtypes.left %>% lapply(function(ct)
+      estimatePositiveMarkerScoreChange(ct, annotation, cm.norm, pos.markers.per.type[[ct]], s.info$pos.scores,
+                                        s.info$neg.scores, s.info$sum.scores, balance.cell.types=F)
+    ) %>% Reduce(rbind, .) %>% .[which.max(.$Score),]
+    
+    if (marker.score$Score < 0) {
+      marker.score <- subtypes.left %>% lapply(function(ct)
+        estimatePositiveMarkerScoreChange(ct, annotation, cm.norm, pos.markers.per.type[[ct]], s.info$pos.scores,
+                                          s.info$neg.scores, s.info$sum.scores)
+      ) %>% Reduce(rbind, .) %>% .[which.max(.$Score),]
+      
+      if (marker.score$Score < 0) {
+        warning("Negative score for ", marker.score$Type, ": ", round(marker.score$Score, 4), ". Consider extending marker list.\n")
+      }
+    }
+    
+    marker.list[[c(marker.score$Type, marker.score$MT)]] %<>% c(marker.score$Gene)
+    subtypes.left %<>% setdiff(marker.score$Type)
+    
+    if (debug) print(marker.score)
+  }
+  
+  return(marker.list)
+}
 
 updateMarkersPerType <- function(markers.per.type, marker.list=NULL, marker.info=NULL) {
   if (!is.null(marker.list)) {
@@ -139,7 +136,7 @@ updateMarkersPerType <- function(markers.per.type, marker.list=NULL, marker.info
   } else {
     stop("Either marker.list or marker.info must be provided")
   }
-
+  
   return(markers.per.type)
 }
 
@@ -151,11 +148,11 @@ preSelectMarkersForType <- function(de.df, whitelist=NULL, blacklist=NULL, min.p
   if (!is.null(whitelist)) {
     de.df %<>% dplyr::filter(Gene %in% whitelist)
   }
-
+  
   if (!is.null(blacklist)) {
     de.df %<>% dplyr::filter(!(Gene %in% blacklist))
   }
-
+  
   de.pos <- de.df[de.df$Z > 0, ]
   if (sum(de.pos$Specificity > min.pos.specificity) < min.pos.markers) {
     pos.markers <- de.pos$Gene[order(de.pos$Specificity, decreasing=T) %>% .[1:min(min.pos.markers, length(.))]]
@@ -166,19 +163,19 @@ preSelectMarkersForType <- function(de.df, whitelist=NULL, blacklist=NULL, min.p
     } else {
       de.pos %<>% .[.$ExpressionFraction > min.pos.expression.frac,] %>%
         .[order(.$Specificity + .$ExpressionFraction * pos.expression.frac.weight, decreasing=T),]
-
+      
       soft.mask <- (de.pos$ExpressionFraction > min.pos.expression.frac.soft) & (de.pos$Specificity > min.pos.specificity.soft)
       if (sum(soft.mask) > min.pos.markers.soft) {
         de.pos %<>% .[soft.mask, ]
       } else {
         de.pos %<>% .[1:min(nrow(.), min.pos.markers.soft), ]
       }
-
+      
       pos.markers <- de.pos %>% .$Gene %>% .[1:min(length(.), max.pos.markers)]
     }
   }
   # Negative: ExpressionFraction < 0.1 && Z < 0 && top by specificity (or > 0.95)
-
+  
   neg.markers <- de.df %>% .[(.$Z < 0) & (.$ExpressionFraction < max.neg.expression.frac), ] %>% .$Gene
   return(list(positive=as.character(pos.markers[!is.na(pos.markers)]), negative=as.character(neg.markers[!is.na(neg.markers)])))
 }
@@ -189,11 +186,11 @@ preSelectMarkerCandidates <- function(de.info, ...) {
   markers.per.type <- lapply(de.info, preSelectMarkersForType, ...)
   markers.per.type <- c("positive", "negative") %>% setNames(., .) %>%
     lapply(function(n) lapply(markers.per.type, `[[`, n))
-
+  
   if (any(unlist(lapply(markers.per.type, sapply, length)) == 0)) {
     warning("Some cell types don't have positive or negative markers")
   }
-
+  
   return(markers.per.type)
 }
 
@@ -212,47 +209,47 @@ getTopNegativeGenes <- function(pos.gene, cell.type, cm.norm, annotation, cur.ne
   cm.norm.neg <- cm.norm[, cur.neg.genes, drop=F]
   neg.scores <- estimateNewNegativeScores(cm.norm.neg, c.max.scores, s.info$neg.scores[,cell.type]) %>%
     `dimnames<-`(dimnames(cm.norm.neg)) # negative score (1-mult) per cell per marker candidate
-
+  
   if (ncol(neg.scores) == 0)
     return(NULL)
-
+  
   neg.score.info <- ((1 - neg.scores) * pos.score.changes[,pos.gene]) %>%
     aggregateScoreChangePerGene(annotation, "both", cell.type)
   neg.score.base <- neg.score.info %>% .[which.max(.$Score),]
   if (neg.score.base$Score < 1e-20)
     return(NULL)
-
+  
   top.neg.ids <- neg.score.info %$% Gene[order(Score, decreasing=T)[1:min(n.neg.genes, nrow(.))]] %>%
     match(colnames(neg.scores))
-
+  
   d.score.per.neg <- lapply(top.neg.ids, estimatePariwiseNegativeScoreChange, neg.scores, pos.score.changes[,pos.gene])
-
+  
   res <- lapply(d.score.per.neg, aggregateScoreChangePerGene, annotation, "both", cell.type) %>%
     lapply(`[`,1,) %>% Reduce(rbind, .) %>% dplyr::rename(NGene1=Gene) %>%
     dplyr::mutate(NGene2=colnames(neg.scores)[top.neg.ids]) %>%  .[which.max(.$Score),]
-
+  
   if ((res$Score - neg.score.base$Score) / abs(neg.score.base$Score) < score.change.threshold) {
-    res <- neg.score.base %>% rename(NGene1=Gene) %>% dplyr::mutate(NGene2=NA)
+    res <- neg.score.base %>% dplyr::rename(NGene1=Gene) %>% dplyr::mutate(NGene2=NA)
   }
-
+  
   return(dplyr::mutate(res, PGene=pos.gene))
 }
 
 getNextMarkers <- function(cell.type, cm.norm, annotation, marker.list, markers.per.type, n.pos.genes=3,
                            n.neg.genes=10, score.change.threshold=0.05, verbose=F, n.cores=1) {
   s.info <- lapply(marker.list, getCellTypeScoreInfo, cm.norm) %>% prepareMarkerScoringInfo()
+  
+  # Score change per cell per marker candidate
   pos.score.changes <- estimatePositiveMarkerScoreChange(cell.type, annotation, cm.norm, markers.per.type$positive[[cell.type]],
                                                          s.info$pos.scores, s.info$neg.scores, s.info$sum.scores, aggr=F)
-
+  
   pos.score.changes.aggr <- aggregateScoreChangePerGene(pos.score.changes, annotation, marker.type="expressed", cell.type=cell.type)
   top.pos.genes <- pos.score.changes.aggr %$% Gene[order(Score, decreasing=T)] %>% .[1:min(n.pos.genes, length(.))]
-
+  
   pos.score <- pos.score.changes.aggr %>% .[which.max(.$Score),]
-  res.score <- plapply(top.pos.genes, getTopNegativeGenes, cell.type, cm.norm, annotation, markers.per.type$negative[[cell.type]], s.info,
-                       pos.score.changes, n.neg.genes=n.neg.genes, score.change.threshold=score.change.threshold,
-                       verbose=verbose, n.cores=max(min(n.cores, n.pos.genes), 1)) %>%
-    .[!sapply(., is.null)]
-
+  res.score <- plapply(top.pos.genes, getTopNegativeGenes, cell.type, cm.norm, annotation, markers.per.type$negative[[cell.type]], s.info, pos.score.changes, n.neg.genes=n.neg.genes, score.change.threshold=score.change.threshold,
+              verbose=verbose, n.cores=max(min(n.cores, n.pos.genes), 1)) %>% .[!sapply(., is.null)]
+  
   if (length(res.score) > 0) {
     if ("try-error" %in% class(res.score[[1]]))
       stop(res.score[[1]])
@@ -260,19 +257,19 @@ getNextMarkers <- function(cell.type, cm.norm, annotation, marker.list, markers.
   } else {
     res.score <- pos.score
   }
-
+  
   if (verbose) {
     message("Neg. score: ", round(res.score$Score, 3), ", Pos. score: ", round(pos.score$Score, 3))
   }
-
+  
   if ((res.score$Score < 1e-10) || ((res.score$Score - pos.score$Score) / abs(pos.score$Score) < score.change.threshold)) {
     res.score <- pos.score %>% dplyr::rename(PGene=Gene) %>% dplyr::mutate(NGene1=NA, NGene2=NA)
   }
-
+  
   if (verbose) {
     message("Score: ", round(res.score$Score, 3), ", PG: ", res.score$PGene, ", NG1:", res.score$NGene1, ", NG2:", res.score$NGene2)
   }
-
+  
   return(list(expressed=res.score$PGene, not_expressed=unlist(res.score[c("NGene1", "NGene2")]) %>% .[!is.na(.)]))
 }
 
@@ -285,7 +282,7 @@ generateFilteredMarkerLists <- function(marker.list) {
   lapply(names(marker.list), function(ct) {
     if (!is.null(marker.list[[ct]]$locked) && marker.list[[ct]]$locked)
       return(c())
-
+    
     lapply(c("expressed", "not_expressed"), function(et)
       lapply(marker.list[[ct]][[et]], filterMarkerList, marker.list, ct, et))
   }) %>% unlist(recursive=F) %>% unlist(recursive=F)
@@ -298,32 +295,33 @@ getMeanConfidencePerType <- function(marker.list, cm.norm, annotation) {
   return(confidence %>% split(annotation[names(.)]) %>% sapply(mean))
 }
 
+#' @description removes redundant markers from the list, using greedy approach. Re-runs itself recursively untill there is nothing to remove.
 filterMarkerListByScore <- function(marker.list, cm.norm, annotation, verbose=F, n.cores=1, do.recursive=T, change.threshold=1e-5) {
   mls.filt <- generateFilteredMarkerLists(marker.list)
   if (length(mls.filt) == 0)
     return(marker.list)
-
+  
   mean.conf.per.type <- getMeanConfidencePerType(marker.list, cm.norm, annotation)
   conf.per.ml <- plapply(mls.filt, getMeanConfidencePerType, cm.norm, annotation, verbose=verbose, n.cores=n.cores)
-
+  
   mean.score.per.ml <- sapply(conf.per.ml, mean)
   t.ids <- which((mean.score.per.ml >= mean(mean.conf.per.type)) & (sapply(conf.per.ml, min) >= min(mean.conf.per.type)))
   if (length(t.ids) == 0)
     return(marker.list)
-
+  
   best.id <- t.ids[which.max(mean.score.per.ml[t.ids])]
   change <- mean.score.per.ml[best.id] - mean(mean.conf.per.type)
-
+  
   ml.res <- mls.filt[[best.id]]
   if (do.recursive && (change > change.threshold)) {
     ml.res <- filterMarkerListByScore(ml.res, cm.norm, annotation, verbose=verbose, n.cores=n.cores,
                                       do.recursive=do.recursive, change.threshold=change.threshold)
   }
-
+  
   if (verbose) {
     message("Score improvement: ", mean.score.per.ml[best.id] - mean(mean.conf.per.type))
   }
-
+  
   return(ml.res)
 }
 
@@ -331,13 +329,13 @@ prepareInitialMarkerList <- function(marker.list, cell.types, parent) {
   marker.list.empty <- emptyMarkerList(cell.types, parent=parent)
   if (is.null(marker.list))
     return(marker.list.empty)
-
+  
   for (n in names(marker.list.empty)) {
     if (is.null(marker.list[[n]])) {
       marker.list[[n]] <- marker.list.empty[[n]]
     }
   }
-
+  
   for (n in names(marker.list)) {
     if (!is.null(parent)) {
       marker.list[[n]]$parent <- parent
@@ -345,90 +343,105 @@ prepareInitialMarkerList <- function(marker.list, cell.types, parent) {
       marker.list[[n]]$parent <- "root"
     }
   }
-
+  
   return(marker.list[cell.types])
 }
 
 #' Select Markers per Type
+#'
+#' @param markers.per.type marker candidate per type
+#' @param marker.list list of already known markers per type, potentially empty
 #' @param cm.norm tf-idf-normalized count matrix with cells by columns and genes by rows
 #' @export
 selectMarkersPerType <- function(cm.norm, annotation, markers.per.type, marker.list=NULL, max.iters=nrow(cm.norm), parent=NULL,
                                  max.uncertainty=0.25, verbose=0, min.pos.markers=1, max.pos.markers=10, log.step=1, n.cores=1, refinement.period=10, return.all=F) {
   if (verbose > 0) message("Running marker selection for parent type '", parent, "'")
-
+  
   for (n in names(marker.list)) {
     marker.list[[n]]$locked <- T
   }
-
-  marker.list %<>% prepareInitialMarkerList(names(markers.per.type$positive), parent=parent) #the maker list here is empty
-
-  cm.norm %<>% .[unique(unlist(markers.per.type)), names(annotation)] %>% as.matrix() %>% Matrix::t() #only take the columns with the pre-selected markers
+  
+  marker.list %<>% prepareInitialMarkerList(names(markers.per.type$positive), parent=parent)
+  
+  # For better performance, remove all genes, we don't use
+  cm.norm %<>% .[unique(unlist(markers.per.type)), names(annotation)] %>% as.matrix() %>% Matrix::t()
+  
+  # Initialize current uncertainty per type to be able to find the least annotated types
   mean.unc.per.type <- (1 - getMeanConfidencePerType(marker.list, cm.norm, annotation))
+  
   did.refinement <- F
-  for (i in 1:max.iters) { # why max.iters are the number of genes
-    n.markers.per.cell <- sapply(marker.list, function(x) length(x$expressed))[names(mean.unc.per.type)]
-    type.mask <- (n.markers.per.cell < max.pos.markers) & (sapply(markers.per.type$positive, length)[names(mean.unc.per.type)] > 0)
+  for (i in 1:max.iters) {
+    n.markers.per.type <- sapply(marker.list, function(x) length(x$expressed))[names(mean.unc.per.type)]
+    
+    # Only markers for types with n.markers < max.pos.markers are updated
+    type.mask <- (n.markers.per.type < max.pos.markers) & (sapply(markers.per.type$positive, length)[names(mean.unc.per.type)] > 0)
     if (sum(type.mask) == 0)
       break
-
-    cell.type <- mean.unc.per.type[type.mask] %>% which.max() %>% names()
+    
+    cell.type <- mean.unc.per.type[type.mask] %>% which.max() %>% names() # The most uncertaint cell type
+    
+    # Get one positive marker, which minimizes uncertainty per this cell type. Can be accompanied by 1-2 negative markers.
     m.update <- getNextMarkers(cell.type, cm.norm, annotation, marker.list=marker.list, markers.per.type=markers.per.type,
                                verbose=(verbose > 1), n.cores=n.cores)
-
+    
+    # Update current marker list
     marker.list.new <- marker.list
     marker.list.new[[cell.type]]$expressed %<>% union(m.update$expressed)
     marker.list.new[[cell.type]]$not_expressed %<>% union(m.update$not_expressed)
-
+    
+    # Remove this marker from candidates
     markers.per.type %<>% updateMarkersPerType(marker.list=setNames(list(m.update), cell.type))
-
+    
+    # Check if the new marker improves mean uncertainty, and if it does, add it to the list
     mean.unc.per.type.new <- (1 - getMeanConfidencePerType(marker.list.new, cm.norm, annotation))
     if (mean(mean.unc.per.type.new) < mean(mean.unc.per.type)) {
       mean.unc.per.type <- mean.unc.per.type.new
       marker.list <- marker.list.new
       did.refinement <- F
     }
-
+    
     if (verbose && (log.step > 0) && (i %% log.step == 0)) {
       message("Iteration ", i, ". Max uncertainty: ", round(max(mean.unc.per.type), 3), ", mean uncertainty: ", round(mean(mean.unc.per.type), 3),
               ". Target type: ", cell.type, ", gene: ", m.update$expressed)
     }
-
+    
     if ((max(mean.unc.per.type) < max.uncertainty) && (sapply(marker.list, function(x) length(x$expressed)) >= min.pos.markers))
       break
-
+    
+    # At some point, some markers can become redundant (or even harmful). So we want to filter them out.
     if ((refinement.period > 0) && (i %% refinement.period == 0) && !did.refinement) {
       if (verbose) message("Refine markers...")
       marker.list %<>% filterMarkerListByScore(cm.norm, annotation, verbose=(verbose > 1), n.cores=n.cores)
       did.refinement <- T
     }
   }
-
+  
   if ((refinement.period != 0) && !did.refinement) {
     if (verbose) message("Refine markers...")
     marker.list %<>% filterMarkerListByScore(cm.norm, annotation, verbose=(verbose > 1), n.cores=n.cores)
   }
-
+  
   for (n in names(marker.list)) {
     marker.list[[n]]$locked <- NULL
   }
-
+  
   if (return.all)
     return(list(marker.list=marker.list, markers.per.type=markers.per.type))
-
+  
   return(marker.list)
 }
 
 prepareDeDf <- function(df, cell.type, annotation, cm.raw, low.expression.threshold=1) {
   if (!("Z" %in% colnames(df)))
     stop("All DE data frames must have 'Z' column")
-
+  
   if (!("Gene" %in% colnames(df))) {
     if (is.null(rownames(df)))
       stop("All DE data frames must have either rownames or 'Gene' column")
-
+    
     df %<>% tibble::as_tibble(rownames="Gene")
   }
-
+  
   return(sccore::appendSpecificityMetricsToDE(df, annotation, cell.type, cm.raw, low.expression.threshold=low.expression.threshold))
 }
 
@@ -447,21 +460,21 @@ prepareDeInfo <- function(de.info, annotation, cm.raw, ..., n.cores=1, verbose=F
 emptyMarkerList <- function(cell.types=NULL, parent=NULL, clf.tree=NULL) {
   if (is.null(cell.types) && is.null(clf.tree))
     stop("Either cell.types or clf.tree must be provided")
-
+  
   if (is.null(cell.types)) {
     cell.types <- names(igraph::V(clf.tree)) %>% setdiff("root")
   }
-
+  
   ml <- cell.types %>% setNames(., .) %>%
     lapply(function(x) list(expressed=c(), not_expressed=c(), parent=parent))
-
+  
   if (!is.null(clf.tree)) {
     clf.df <- classificationTreeToDf(clf.tree)
     for (n in names(ml)) {
       ml[[n]]$parent <- clf.df %$% Parent[Node == n]
     }
   }
-
+  
   return(ml)
 }
 

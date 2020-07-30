@@ -86,3 +86,18 @@ rateMetricsPerType <- function(ann.res, ann.reference) {
     as.data.frame()
   return(res)
 }
+
+classificationTreeToHierarhy <- function(clf.tree, max.depth=NULL) {
+  hierarchy.df <- classificationTreeToDf(clf.tree)
+  if (!is.null(max.depth)) {
+    hierarchy.df %<>% dplyr::filter(PathLen <= max.depth)
+  }
+  hierarchy.df %$% setdiff(Node, Parent) %>% mergeAnnotationByLevels(clf.tree) %>% as_tibble() %>% splitDfByNextCol()
+}
+
+splitDfByNextCol <- function(df) {
+  if (ncol(df) == 1)
+    return(df[[1]])
+  
+  return(lapply(split(df[2:ncol(df)], df[[1]]), splitDfByNextCol))
+}

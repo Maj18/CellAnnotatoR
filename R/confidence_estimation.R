@@ -5,8 +5,8 @@ getAnnotationConfidence <- function(annotation, scores) {
 
 #' Score Per Cell Uncertainty
 #' @description Score uncertainty per each cell
-#' @param annotation assigned annotation labels. Can be obtrained with `assignCellsByScores`. #ann_by_level$annotation
-#' @param scores.norm assignment scores. Can be obtrained with `assignCellsByScores`. #ann_by_level$scores
+#' @param annotation assigned annotation labels. Can be obtrained with `assignCellsByScores`.
+#' @param scores.norm assignment scores. Can be obtrained with `assignCellsByScores`.
 #' @param score.info list of marker scores per cell type. Can be obtained with `getMarkerScoreInfo`
 #' @param cur.types subset of types used to measure uncertainty. Default: all values presented in annotation
 #' @param coverage.max.quantile all coverage values above this quantille are winsorized
@@ -18,19 +18,19 @@ getAnnotationConfidence <- function(annotation, scores) {
 scorePerCellUncertainty <- function(annotation, scores.norm, score.info, cur.types=unique(annotation), coverage.max.quantile=0.75) {
   positive <- getAnnotationConfidence(annotation, scores.norm[names(annotation),])
 
-  cbs.per.type <- split(names(annotation), annotation)
+  cbs.per.type <- split(names(annotation), annotation) #a list of cell types, with their re-annotated cells (right cells, not all cells)
   negative.mult <- cur.types %>%
-    lapply(function(n) score.info[[n]]$mult[cbs.per.type[[n]]]) %>%
+    lapply(function(n) score.info[[n]]$mult[cbs.per.type[[n]]]) %>% #also got the right cells
     Reduce(c, .)
 
   coverage <- cur.types %>%
     lapply(function(n) score.info[[n]]$scores[cbs.per.type[[n]]]) %>%
-    Reduce(c, .) %>% pmin(quantile(., coverage.max.quantile))  #Reduce(c,.): list to vector
+    Reduce(c, .) %>% pmin(quantile(., coverage.max.quantile)) #based on the non-normalized St, #each type with right cells, not all cells.
 
   return(list(
     positive=(1 - positive),
     negative=(1 - negative.mult),
-    coverage=(1 - coverage / max(coverage))
+    coverage=(1 - coverage / max(coverage)) #Yes, coverage is based on non-normalized St, it tends to tell us which are not expressed. #I remember, the default threshold for coverage is too large 0.5. When this value is translated to St
   ))
 }
 
@@ -86,7 +86,7 @@ filterAnnotationByUncertainty <- function(annotation, scores, score.info, cur.ty
     }
   } else {
     for (n in names(thresholds)) {
-      annotation[unc.per.cell[[n]][names(annotation)] > thresholds[[n]]] <- NA
+      annotation[unc.per.cell[[n]][names(annotation)] > thresholds[[n]]] <- NA #So the threshold is very important here.
     }
   }
 

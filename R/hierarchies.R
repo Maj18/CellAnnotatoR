@@ -88,8 +88,9 @@ splitClusteringDf <- function(df) {
   if (ncol(df) == 1)
     return(df[[1]])
 
-  return(split(df, df[,1]) %>% lapply(function(x) splitClusteringDf(x[,2:ncol(x)])))
+  return(split(df, df[,1]) %>% lapply(function(x) splitClusteringDf(x[,2:ncol(x)]))) # 这个就是循环套循环的情况
 }
+#split the dataframe into list layer after layer; a hierarchical list of clusters, the clusters in the last layer has all their cell types
 
 #' Derive Hierarchy
 #' @description derive hierarchy from the data using hclust
@@ -104,8 +105,10 @@ splitClusteringDf <- function(df) {
 #'   plotTypeHierarchy(clf_tree)
 #'
 #' @export
-deriveHierarchy <- function(feature.matrix, annotation, dist.method="cor", max.depth=2) {
-  feature.matrix %<>% as("dgCMatrix") %>% conos:::collapseCellsByType(groups=annotation, min.cell.count=0)
+deriveHierarchy <- function(feature.matrix, annotation, dist.method="cor", levels=c(0.8, (1-1e-5))) {
+  feature.matrix %<>% as("dgCMatrix") %>% conos:::collapseCellsByType(groups=annotation, min.cell.count=0) # take PCA components sum of each cluster of cells, 100 (100 PCA components) values for each cluster. # The clusters here function like cells
+  # Some study take of cluster median for each PCA component, while here we use sum, I think sum is better
+  # I don't think I will need this step, because I need the cells to calcualte S(t) scores
 
   if (dist.method == "cor") {
     c.dist <- (1 - cor(Matrix::t(feature.matrix))) %>% as.dist()
@@ -114,13 +117,64 @@ deriveHierarchy <- function(feature.matrix, annotation, dist.method="cor", max.d
   }
 
   clusts <- hclust(c.dist)
-  heights <- quantile(clusts$height, seq(0, 1, length.out=max.depth + 1) %>% .[2:(length(.)-1)]) %>% rev()
+  #heights <- quantile(clusts$height, seq(0, 1, length.out=max.depth + 1) %>% .[2:(length(.)-1)]) %>% rev()
+  #heights <- quantile(clusts$height, c(0.5, 0.6, 0.7, 0.8, 0.9, (1-1e-5))) %>% rev() 
+  heights <- quantile(clusts$height, levels) %>% rev() 
   clusts %<>% cutree(h=heights) %>% as.matrix()
   for (i in 1:ncol(clusts)) {
     clusts[,i] %<>% paste0("l", i, "_", .)
-  }
+  }  # rename the clusters at each layer to e.g. l1_1, l1_2, l1_3 ...
 
-  clusts %<>% cbind(rownames(.)) %>% `colnames<-`(paste0("l", 1:ncol(.))) %>% tibble::as_tibble()
+  clusts %<>% cbind(rownames(.)) %>% `colnames<-`(paste0("l", 1:ncol(.))) %>% tibble::as_tibble() #name the columns as e.g. l1, l2, l3...
 
   return(clusts %>% splitClusteringDf() %>% simplifyHierarchy())
+}
+
+# modified from stats:::cuttree  (only has stats::: added)
+# At each cutting line, this program assign all the cells to the available clusters at the cutting lines.
+# Here the output is like the annotation at different layers.
+cuttreeLi <- function (tree, k = NULL, h = NULL) 
+{
+  if (is.null(n1 <- nrow(tree$merge)) || n1 < 1) 
+    stop("invalid 'tree' ('merge' component)")
+  n <- n1 + 1
+  if (is.null(k) && is.null(h)) 
+    stop("either 'k' or 'h' must be specified")
+  if (is.null(k)) {
+    if (is.unsorted(tree$height)) 
+      stop("the 'height' component of 'tree' is not sorted (increasingly)")
+    k <- n + 1L - apply(outer(c(tree$height, Inf), h, ">"), 2, which.max)
+    #apply(outer(c(tree$height, Inf), h, ">"), 2, which.max), here since the height is in ascending order, we get the first height that is larger than the cutting threshold provided by h.
+    #k refers to, if height is in a decending order, the last height that is above the threshold given by h.
+    if (getOption("verbose")) 
+      message("cutree(): k(h) = ", k, domain = NA)
+  } else {
+    k <- as.integer(k)
+    if (min(k) < 1 || max(k) > n) 
+      stop(gettextf("elements of 'k' must be between 1 and %d", 
+                    n), domain = NA)
+  }
+  ans <- .Call(stats:::C_cutree, tree$merge, k) #Get the cluster labels for each cell at the cutting (i.e. all the branches that were cut through)  # The cell order here is the same as that of clusts$labels
+  if (length(k) == 1L) {
+    ans <- setNames(as.vector(ans), tree$labels)
+  }
+  else {
+    colnames(ans) <- if (!is.null(h)) 
+      h
+    else k
+    rownames(ans) <- tree$labels  #
+  } 
+  return(ans)
+}
+
+
+#Modified from conos:::collapseCellsByType (only added conos:::)
+collapseCellsByTypeLi <- function (cm, groups, min.cell.count = 10) 
+{
+  groups <- as.factor(groups)
+  cl <- factor(groups[match(rownames(cm), names(groups))], 
+               levels = levels(groups))
+  tc <- conos:::colSumByFactor(cm, cl)
+  tc <- tc[-1, , drop = F]
+  tc[table(cl) >= min.cell.count, ]
 }

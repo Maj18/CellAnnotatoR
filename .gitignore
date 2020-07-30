@@ -11,3 +11,5 @@
 *.rds
 inst/doc
 data
+*.DS_Store
+*.pkl
