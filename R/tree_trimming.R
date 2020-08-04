@@ -8,19 +8,19 @@ markerListToMarkupLi <- function(marker.list, file="", top.parents, group.by.par
         marker.list[[n]]$parent <- "root"
       }
     }
-    
+
     ml.per.parent <- marker.list %>% split(sapply(., `[[`, "parent")) %$%
       c(list(root="root"), .[names(.) != "root"])
     markup.text <- names(ml.per.parent) %>% lapply(function(pn)
       paste0("## ", pn, "\n\n", markerListToMarkupLi(ml.per.parent[[pn]], group.by.parent=F))) %>%
       paste0(collapse="")
   }
-  
+
   if (!is.null(file) && nchar(file) > 0) {
     cat(markup.text, file=file)
     return(file)
   }
-  
+
   return(markup.text)
 }
 
@@ -29,16 +29,16 @@ markersToMarkupLi <- function(markers, root, name) {
   if (!is.null(markers$parent) && (markers$parent %in% root)) {
     markers$parent <- NULL
   }
-  
+
   expr <- paste0("expressed: ", paste0(markers$expressed, collapse=", "), "\n")
   if (!is.null(markers$not_expressed) && length(markers$not_expressed) > 0) {
     not.expr <- paste0("not expressed: ", paste0(markers$not_expressed, collapse=", "), "\n")
   } else {
     not.expr <- ""
   }
-  
+
   parent <- if (!is.null(markers$parent)) paste0("subtype of: ", markers$parent[1], "\n") else ""
-  
+
   return(paste0("> ", name, "\n", expr, not.expr, parent, "\n"))
 }
 
@@ -49,12 +49,12 @@ treePrunePrep <- function(ann.by.level, min.cluster.size=6){
   if (ann.by.level[[1]]%>%unique%>%length>1)
     ann.by.level <- c(list(root=rep("root", length(ann.by.level[[1]]))
                            %>%setNames(names(ann.by.level[[1]]))), ann.by.level)
-      
-  parent.singleton <-  lapply(1:(length(ann.by.level)-1), function(i) 
+
+  parent.singleton <-  lapply(1:(length(ann.by.level)-1), function(i)
     split(ann.by.level[[i+1]], ann.by.level[[i]])) %>%
     Reduce(c, .) %>% .[sapply(., function(x) length(unique(x)) == 1)] %>%  #remove %>% .[sapply(., length) > 5] after Reduce
     names %>% setdiff(ann.by.level[[length(ann.by.level)]]%>%unique)
-  
+
   depth <- length(ann.by.level)
   message("Remove singletons ...")
   for (i in 2:depth){
@@ -73,15 +73,15 @@ treePrunePrep <- function(ann.by.level, min.cluster.size=6){
     if (length(small.clusters)!=0)
       for (s in small.clusters)
         ann.by.level <- rmSmallCluster(s, ann.by.level, i)}
-  
+
   #Remove repeated layers (at lower level)
   message("Remove repeated layers ...")
   ann.by.level <- rmRepeatLayer(ann.by.level)
-  
+
   return(ann.by.level)
 }
 
-  
+
 rmSmallCluster <- function(small.clust, ann.by.level, layer.index){ #here layer.index>1
   depth <- length(ann.by.level)
   cells <- ann.by.level[[layer.index]] %>% .[.==small.clust] %>% names
@@ -89,7 +89,7 @@ rmSmallCluster <- function(small.clust, ann.by.level, layer.index){ #here layer.
   cells <- ann.by.level[[layer.index-1]] %>% .[.==parent] %>% names
   for (k in depth:layer.index)
     ann.by.level[[k]][cells] <- ann.by.level[[layer.index-1]][cells]
-  
+
   return(ann.by.level)
 }
 
@@ -100,7 +100,7 @@ rmSmallCluster <- function(small.clust, ann.by.level, layer.index){ #here layer.
 #   # keep <- layer.index+1
 #   # for (k in layer.index:(depth-2))
 #   #   if (length(unique(ann.by.level[[k+2]][cells]))==1) keep=k+2
-#   # 
+#   #
 #   # mapply(function(i,j) ann.by.level[[i]][cells]<-ann.by.level[[j]][cells], layer.index:(depth-keep+layer.index), keep:depth)
 #   # for (u in (depth-keep+layer.index+1):(depth-1))
 #   #   ann.by.level[[u]][cells] <- ann.by.level[[depth]][cells]
@@ -108,7 +108,7 @@ rmSmallCluster <- function(small.clust, ann.by.level, layer.index){ #here layer.
 #     ann.by.level[[k]][cells] <- ann.by.level[[k+1]][cells]
 #   return(ann.by.level)
 # }
-# 
+#
 # for (i in 2:depth)
 #   #Remove singletons:
 #   singletons <- intersect(parent.singleton, ann.by.level[[i]] %>% unique)
@@ -127,36 +127,36 @@ rmRepeatLayer <- function(ann.by.level){
     } else {break}
   }
   ann.by.level %<>% .[1:tip.layer.index]
-  
+
   return(ann.by.level)
 }
 
 
 getMarkersForLayers23 <- function(p2, ann.by.level, start.layer.index){
-  ann.by.parent <- lapply(start.layer.index:(start.layer.index+1), function(i) 
+  ann.by.parent <- lapply(start.layer.index:(start.layer.index+1), function(i)
     split(ann.by.level[[i+1]], ann.by.level[[i]])) %>%
   Reduce(c, .) %>% .[sapply(., length) > 5] %>% .[sapply(., function(x) length(unique(x)) > 1)]
-  
-  cm.norm <- p2$counts %>% Matrix::t() #%>% normalizeTfIdfWithFeatures() 
+
+  cm.norm <- p2$counts %>% Matrix::t() #%>% normalizeTfIdfWithFeatures()
   if (length(ann.by.parent)>0) {
   #pre-select markers
     de.info.per.parent <- ann.by.parent %>%
      pblapply(function(ann) p2$getDifferentialGenes(groups=ann, z.threshold=0, append.auc=T)) #CHANGE FROM F TO T 7.22.
-  
+
     pre.selected.markers <- de.info.per.parent %>% lapply(function(dfs)
       list(
         positive=lapply(dfs, function(df) as.character(df$Gene[df$Z > 0.001])),
         negative=lapply(dfs, function(df) as.character(df$Gene[df$Z < -0.001]))
       )
     )
-  
+
     #Select markers
     marker.info <- names(de.info.per.parent) %>% setNames(., .) %>% lapply(function(n)
       selectMarkersPerType(cm.norm, ann.by.parent[[n]], pre.selected.markers[[n]],
                          parent=n,max.iters=50, max.uncertainty=0.25, log.step=5, verbose=1, n.cores=10))
-  
+
     marker.list <- setNames(marker.info, NULL) %>% unlist(recursive=F)
-    
+
     return(list(marker.list=marker.list, ann.by.parent=ann.by.parent))
   } else{
     return(list(marker.list=NULL, ann.by.parent=NULL))
@@ -165,29 +165,29 @@ getMarkersForLayers23 <- function(p2, ann.by.level, start.layer.index){
 
 
 getMarkersForNextLayer <- function(p2, ann.by.level, start.layer.index){
-  ann.by.parent <- split(ann.by.level[[start.layer.index+1]], ann.by.level[[start.layer.index]])%>% 
+  ann.by.parent <- split(ann.by.level[[start.layer.index+1]], ann.by.level[[start.layer.index]])%>%
     .[sapply(., length) > 5] %>% .[sapply(., function(x) length(unique(x)) > 1)]
-  cm.norm <- p2$counts %>% Matrix::t() #%>% normalizeTfIdfWithFeatures() 
-  
+  cm.norm <- p2$counts %>% Matrix::t() #%>% normalizeTfIdfWithFeatures()
+
   if (length(ann.by.parent)>0) {
     #pre-select markers
     de.info.per.parent <- ann.by.parent %>%
       pblapply(function(ann) p2$getDifferentialGenes(groups=ann, z.threshold=0, append.auc=T))
-    
+
     pre.selected.markers <- de.info.per.parent %>% lapply(function(dfs)
       list(
         positive=lapply(dfs, function(df) as.character(df$Gene[df$Z > 0.001])),
         negative=lapply(dfs, function(df) as.character(df$Gene[df$Z < -0.001]))
       )
     )
-    
+
     #Select markers
     marker.info <- names(de.info.per.parent) %>% setNames(., .) %>% lapply(function(n)
       selectMarkersPerType(cm.norm, ann.by.parent[[n]], pre.selected.markers[[n]],
                            parent=n, max.iters=50, max.uncertainty=0.25, log.step=5, verbose=1, n.cores=10))
-    
+
     marker.list <- setNames(marker.info, NULL) %>% unlist(recursive=F)
-    
+
     message("\ngetMarkersForNextLayer is finished!")
     return(marker.list)
   } else{
@@ -199,7 +199,7 @@ getMarkersForNextLayer <- function(p2, ann.by.level, start.layer.index){
 
 liftTree <- function(parent, ann.by.level, layer.index){
   depth <- names(ann.by.level)%>%length()
-  cells.p <- ann.by.level[[layer.index+1]][ann.by.level[[layer.index+1]]==parent] %>% names 
+  cells.p <- ann.by.level[[layer.index+1]][ann.by.level[[layer.index+1]]==parent] %>% names
   for (i in (layer.index+1):(depth-1)) {
     ann.by.level[[i]][cells.p] <- ann.by.level[[i+1]][cells.p]}
   message("\nNow the liftTree is finished!")
@@ -211,26 +211,37 @@ liftTree <- function(parent, ann.by.level, layer.index){
 removeParentNoPos <- function(p2, ann.by.level, ann.by.level.sub, layer.index){
   message("\nGet markers for parents under the grandparent ", ann.by.level.sub[[layer.index]]%>%unique)
   markers.subtypes <- getMarkersForNextLayer(p2, ann.by.level.sub, layer.index) #what about the other un-considered parents have no markers?
+
   types.no.pos <- markers.subtypes[sapply(markers.subtypes, function(x) length(x$expressed) == 0)] %>% names()
   message("\nThe cell types that have no positive markers are ", types.no.pos)
   parents.no.pos <- c()
   for (type in types.no.pos) {
     if (ann.by.level.sub[[layer.index+2]][ann.by.level.sub[[layer.index+1]]%>%.[.==type]%>%names]%>%unique%>%length>1) {
-      parents.no.pos<-c(parents.no.pos, type)}}
+      parents.no.pos<-c(parents.no.pos, type)
+    }
+  }
+
   message("\nParent types that have no positive markers are ", parents.no.pos)
   #remove the parent type at layer.index+1 if no marker identified for it, and then lift the entire related lineage up.
-  while (length(parents.no.pos)>0){ 
-    for (parent in parents.no.pos) {message("The no-positive-marker parent to be removed is ", parent); ann.by.level.sub<-liftTree(parent, ann.by.level.sub, layer.index); ann.by.level<-liftTree(parent, ann.by.level, layer.index)}
+  while (length(parents.no.pos) > 0) {
+    for (parent in parents.no.pos) {
+      message("The no-positive-marker parent to be removed is ", parent)
+      ann.by.level.sub <-
+        liftTree(parent, ann.by.level.sub, layer.index)
+      ann.by.level <- liftTree(parent, ann.by.level, layer.index)
+    }
     message("\nAfter removed the no-positive-marker parent, now we need to get markers for the new parent layer")
     markers.subtypes <- getMarkersForNextLayer(p2, ann.by.level.sub, layer.index)
     types.no.pos <- markers.subtypes[sapply(markers.subtypes, function(x) length(x$expressed) == 0)] %>% names()
     message("\nThe new cell types without positive marker are ", types.no.pos)
     parents.no.pos <- c()
     for (type in types.no.pos) {
-      if (ann.by.level.sub[[layer.index+2]][ann.by.level.sub[[layer.index+1]]%>%.[.==type]%>%names]%>%unique%>%length>1) {
-        parents.no.pos<-c(parents.no.pos, type)}}
+      if (ann.by.level.sub[[layer.index + 2]][ann.by.level.sub[[layer.index + 1]] %>% .[. == type] %>% names] %>% unique %>% length > 1) {
+        parents.no.pos <- c(parents.no.pos, type)
+      }
+    }
     message("\nThe new parents without positive marker are ", parents.no.pos)
-  } 
+  }
   message("\nNow, the removeParentNoPos is finished!")
   return(list(ann.by.level=ann.by.level, ann.by.level.sub=ann.by.level.sub, markers.subtypes=markers.subtypes))
 }
@@ -239,22 +250,23 @@ removeParentNoPos <- function(p2, ann.by.level, ann.by.level.sub, layer.index){
 getScore <- function(ann.by.level, marker.list, cm.norm, layer.index){
   types.no.pos <- marker.list[sapply(marker.list, function(x) length(x$expressed) == 0)] %>% names() #Here the types could be singleton or parent types
   #nonparent.no.pos <- sapply(types.no.pos, function(n) if (ann.by.level[[layer.index+2]][ann.by.level[[layer.index+1]]%>%.[.==n]%>%names]%>%unique%>%length==1) n)
-  
+
   top.parent <- ann.by.level[[layer.index]] %>% unique()
-  marker.list %>% .[sapply(., function(x) length(x$expressed) > 0)] %>% 
-    markerListToMarkupLi(top.parent, file="~/CellAnnotatoR-dev/notebooks/12hclust_trimming/marker_list.txt", 
-                         group.by.parent=F)     
-  
+  marker.list %>% .[sapply(., function(x) length(x$expressed) > 0)] %>%
+    markerListToMarkupLi(top.parent, file="~/CellAnnotatoR-dev/notebooks/12hclust_trimming/marker_list.txt",
+                         group.by.parent=F)
+
   clf.data <- getClassificationData(cm.norm, "~/CellAnnotatoR-dev/notebooks/12hclust_trimming/marker_list.txt")
-  
+
   score.info <- getMarkerScoreInfo(clf.data) #For the tip clusters withough positive markers, we assign a score of 0 to them
-  if (length(types.no.pos)!=0){
-    for (type in types.no.pos)
+  if (length(types.no.pos)!=0){ #
+    for (type in types.no.pos) {
       cells.all <- score.info[[1]]$scores.raw %>% names()
-    score.info[[type]]$scores.raw <- rep(0, length(cells.all)) %>% setNames(., cells.all)
-    score.info[[type]]$mult <- rep(0, length(cells.all)) %>% setNames(., cells.all)
-    score.info[[type]]$max.positive <- rep(0, length(cells.all)) %>% setNames(., cells.all)
-    score.info[[type]]$scores <- rep(0, length(cells.all)) %>% setNames(., cells.all)
+      score.info[[type]]$scores.raw <- rep(0, length(cells.all)) %>% setNames(., cells.all)
+      score.info[[type]]$mult <- rep(0, length(cells.all)) %>% setNames(., cells.all)
+      score.info[[type]]$max.positive <- rep(0, length(cells.all)) %>% setNames(., cells.all)
+      score.info[[type]]$scores <- rep(0, length(cells.all)) %>% setNames(., cells.all)
+    }
   }
   message("\ngetScore is finished!")
   return(score.info)
@@ -270,9 +282,9 @@ treePruneSingleLayer <- function(p2, ann.by.level, ann.by.level.sub, layer, wei=
   layer.index <- match(layer, names(ann.by.level))
   message("\nThe current layer.index is ", layer.index)
   if (ann.by.level.sub[[layer.index+1]]%>%unique%>%length==1) {return(list(ann.by.level=ann.by.level, ann.by.level.sub=ann.by.level.sub, k=0))}
-  depth <- names(ann.by.level)%>%length()  
-  cm.norm <- p2$counts %>% Matrix::t() #%>% normalizeTfIdfWithFeatures() 
-  
+  depth <- names(ann.by.level)%>%length()
+  cm.norm <- p2$counts %>% Matrix::t() #%>% normalizeTfIdfWithFeatures()
+
   #remove the parent type at layer.index+1 if no marker identified for it, and then lift the entire related lineage up.
   message("\nNow remove the parents that have no positive markers...")
   parent.no.pos.removed <- removeParentNoPos(p2, ann.by.level, ann.by.level.sub, layer.index)
@@ -280,7 +292,7 @@ treePruneSingleLayer <- function(p2, ann.by.level, ann.by.level.sub, layer, wei=
   ann.by.level <- parent.no.pos.removed$ann.by.level
   message("\nGet markers for the parents under the grandparent type ", ann.by.level.sub[[layer.index]]%>%unique)
   markers.parents <- parent.no.pos.removed$markers.subtypes
-  
+
   #Only cell types under the same grandparent are considered for St and its normalization
   #markers.parents <- getMarkersForNextLayer(p2, ann.by.level.sub, layer.index)
   message("\nGet St scores for the parents under the grandparent type ", ann.by.level.sub[[layer.index]]%>%unique)
@@ -291,12 +303,12 @@ treePruneSingleLayer <- function(p2, ann.by.level, ann.by.level.sub, layer, wei=
   score.info <- lapply(names(score.info)%>%setNames(.,.), function(n) {
     cells<-ann.by.level.sub[[layer.index+1]][ann.by.level.sub[[layer.index+1]]==n]%>%names;
     score.info[cells,n]}) %>% unlist
-  
+
   parent.types <- ann.by.level.sub[[layer.index+1]] %>% unique #WHAT ABOUT parent.types is empty
   sink("/home/rstudio/CellAnnotatoR-dev/notebooks/log.out", append=TRUE) #for debugging
   cat("\nThe parent types under the grandparent type", ann.by.level.sub[[layer.index]]%>%unique, "are", parent.types)
   sink()
-  
+
   message("\nThe parent types under the grandparent type ", ann.by.level.sub[[layer.index]]%>%unique, " are ", parent.types)
   #There will be as many markers.sub.replaced as the subtypes.
   for (parent in parent.types){
@@ -305,9 +317,9 @@ treePruneSingleLayer <- function(p2, ann.by.level, ann.by.level.sub, layer, wei=
       sink("/home/rstudio/CellAnnotatoR-dev/notebooks/log.out", append=TRUE) #for debugging
       cat("\nTemporarily replace the parent", parent, "by its kids, so we can compare with that without this replacement...")
       sink()
-      
+
       message("\nTemporarily replace the parent ", parent, " by its kids, so we can compare with that without this replacement...")
-      ann.by.level.replaced <- ann.by.level.sub #temporary replace, only replace the parent layer, not the others 
+      ann.by.level.replaced <- ann.by.level.sub #temporary replace, only replace the parent layer, not the others
       parent.cells <- ann.by.level.sub[[layer.index+1]] %>% .[.==parent] %>% names
       ann.by.level.replaced[[layer.index+1]][parent.cells] <- ann.by.level.replaced[[layer.index+2]][parent.cells]
       message ("\nMarker secltion for all types under the grandparent ", ann.by.level.sub[[layer.index]]%>%unique, " while the parent ", parent, " being replaced by its kids ...")
@@ -321,44 +333,44 @@ treePruneSingleLayer <- function(p2, ann.by.level, ann.by.level.sub, layer, wei=
           score.info.replaced[cells,n]}) %>% unlist
         message("\nTest and replace if necessary")
         message("\nIf the grandparent layer is the root...")
-        
+
         sink("/home/rstudio/CellAnnotatoR-dev/notebooks/log.out", append=TRUE) #for debugging
         cat("\nThe mean St score before replacement: ", mean(score.info))
         cat("\nThe mean St score after replacement: ", mean(score.info.replaced))
         sink()
-        
+
         if ((layer.index==1) && (sum(score.info)<0.75*sum(score.info.replaced))) { #For layer 1
           sink("/home/rstudio/CellAnnotatoR-dev/notebooks/log.out", append=TRUE) #for debugging
           cat("\n(layer.index==1) && (sum(score.info)<0.75*sum(score.info.replaced)), so we accept the replacement.")
           sink()
-          
-          ann.by.level <- liftTree(parent, ann.by.level, layer.index); 
-          ann.by.level.sub <- liftTree(parent, ann.by.level.sub, layer.index); 
-          k <- k+1; score.info <- score.info.replaced} 
+
+          ann.by.level <- liftTree(parent, ann.by.level, layer.index);
+          ann.by.level.sub <- liftTree(parent, ann.by.level.sub, layer.index);
+          k <- k+1; score.info <- score.info.replaced}
         if (layer.index>1){#For the other layers:
             message("\nIf the grandparent is not the root...")
-            # when mean(score.info <= 0.25) 
+            # when mean(score.info <= 0.25)
             if (mean(score.info)<=0.25 && mean(score.info.replaced)>(mean(score.info)+0.05)) {
               sink("/home/rstudio/CellAnnotatoR-dev/notebooks/log.out", append=TRUE) #for debugging
               cat("\nFor layer.index>1:")
               cat("\nmean(score.info)<=0.25 && mean(score.info.replaced)>(mean(score.info)+0.05), therefore we accept the replacement.")
               sink()
-              
+
               message("\nNow we remove parent ", parent, " and lift up the part of the tree below it")
-              ann.by.level <- liftTree(parent, ann.by.level, layer.index); 
-              ann.by.level.sub <- liftTree(parent, ann.by.level.sub, layer.index); 
-              k <- k+1; 
-              score.info <- score.info.replaced} 
-            
+              ann.by.level <- liftTree(parent, ann.by.level, layer.index);
+              ann.by.level.sub <- liftTree(parent, ann.by.level.sub, layer.index);
+              k <- k+1;
+              score.info <- score.info.replaced}
+
             if (mean(score.info)>0.25 && mean(score.info)<=mean(wei*score.info.replaced))  { # when mean(score.info >0.25)
               sink("/home/rstudio/CellAnnotatoR-dev/notebooks/log.out", append=TRUE) #for debugging
               cat("\nmean(score.info)>0.25 && mean(score.info)<=mean(wei*score.info.replaced), therefore we accept the replacement.")
-              sink()   
-              
+              sink()
+
               message("\nNow we remove parent ", parent, " and lift up the part of the tree below it")
-              ann.by.level <- liftTree(parent, ann.by.level, layer.index); 
-              ann.by.level.sub <- liftTree(parent, ann.by.level.sub, layer.index); 
-              k <- k+1; 
+              ann.by.level <- liftTree(parent, ann.by.level, layer.index);
+              ann.by.level.sub <- liftTree(parent, ann.by.level.sub, layer.index);
+              k <- k+1;
               score.info <- score.info.replaced}} # For the rest of layers, wei=1
       }
     }
@@ -378,7 +390,7 @@ treePrunesSingleLayer <- function(p2, ann.by.level, ann.by.level.sub, layer, wei
     sink("/home/rstudio/CellAnnotatoR-dev/notebooks/log.out", append=TRUE) #for debugging
     cat("\nBecause k>0, we need to rerun the trimming for the grandparent type", ann.by.level.sub[[layer]]%>%unique)
     sink()
-    
+
     message("\nBecause k>0, we need to rerun the trimming for the grandparent type ", ann.by.level.sub[[layer]]%>%unique)
     ann.by.level.2 <- treePruneSingleLayer(p2, ann.by.level, ann.by.level.sub, layer, wei)
     ann.by.level <- ann.by.level.2$ann.by.level
@@ -398,20 +410,20 @@ treePrunes <- function(p2, ann.by.level, wei=1, start.layer.index=1) {
   sink("/home/rstudio/CellAnnotatoR-dev/notebooks/log.out") #for debugging
   cat("Let's start")
   sink()
-  
+
   tree.depth <- length(ann.by.level)
   for (layer in names(ann.by.level)[start.layer.index:(tree.depth-2)]) { #the LAYERS compared actually the two below the starting layer, not the starting layer and the one below it.
     sink("/home/rstudio/CellAnnotatoR-dev/notebooks/log.out", append=TRUE) #for debugging
     cat("\n\nThe present layer is", layer)
     sink()
-    
+
     message("\nThe present layer is ", layer)
     layer.types <- ann.by.level[[layer]] %>% unique()
     for (type in layer.types) {
       sink("/home/rstudio/CellAnnotatoR-dev/notebooks/log.out", append=TRUE) #for debugging
       cat("\nThe present grandparent cell type on focus is", type, " at layer ", layer)
       sink()
-      
+
       message("\nThe present grandparent cell type on focus is ", type, " at layer ", layer)
       type.cells <- ann.by.level[[layer]] %>% .[.==type] %>% names
       ann.by.level.sub <- list()
@@ -421,7 +433,7 @@ treePrunes <- function(p2, ann.by.level, wei=1, start.layer.index=1) {
       message("\nThe trimming for the grandparent ", type, " is now finished!")
     }
   }
-  
+
   for (i in tree.depth:2) {
     tip.layer.index <- i
     if (length(ann.by.level[[i]]%>%unique %>% setdiff(ann.by.level[[i-1]]%>%unique))==0) {
@@ -434,107 +446,107 @@ treePrunes <- function(p2, ann.by.level, wei=1, start.layer.index=1) {
 
 
 
-annToTreeDf <- function(ann.by.level) {
-  if (ann.by.level[[1]]%>%unique%>%length>1){
-    ann.by.level <- c(list(root=rep("root", length(ann.by.level[[1]]))
-                           %>%setNames(names(ann.by.level[[1]]))), ann.by.level)
-  }
-  
-  depth <- length(ann.by.level)
-  ann.split <- list()
-  for (i in 1:(depth-1)){
-    ann.split[[paste0("l",i)]] <- ann.by.level[[i+1]] %>% split(ann.by.level[[i]]) %>% lapply(unique)
-  }
-  
-  parent <- c()
-  node <- c()
-  path.len <- c()
-  for (i in 1:length(ann.split)) {
-    for (j in names(ann.split[[i]])){
-      for (l in ann.split[[i]][[j]]){
-        if (j != l){
-          path.len <- c(path.len,i)
-          parent <- c(parent, j)
-          node <- c(node, l)
-        }
-      }
-    }
-  }
-  
-  root <- ann.split[[1]] %>% names()
-  parent[parent==root] <- "root"
-  
-  c.df <- tibble(
-    Parent = parent,
-    Node = node,
-    PathLen = as.numeric(path.len)
-  )
-  
-  return(c.df)
-}
+# annToTreeDf <- function(ann.by.level) {
+#   if (ann.by.level[[1]]%>%unique%>%length>1){
+#     ann.by.level <- c(list(root=rep("root", length(ann.by.level[[1]]))
+#                            %>%setNames(names(ann.by.level[[1]]))), ann.by.level)
+#   }
+#
+#   depth <- length(ann.by.level)
+#   ann.split <- list()
+#   for (i in 1:(depth-1)){
+#     ann.split[[paste0("l",i)]] <- ann.by.level[[i+1]] %>% split(ann.by.level[[i]]) %>% lapply(unique)
+#   }
+#
+#   parent <- c()
+#   node <- c()
+#   path.len <- c()
+#   for (i in 1:length(ann.split)) {
+#     for (j in names(ann.split[[i]])){
+#       for (l in ann.split[[i]][[j]]){
+#         if (j != l){
+#           path.len <- c(path.len,i)
+#           parent <- c(parent, j)
+#           node <- c(node, l)
+#         }
+#       }
+#     }
+#   }
+#
+#   root <- ann.split[[1]] %>% names()
+#   parent[parent==root] <- "root"
+#
+#   c.df <- tibble(
+#     Parent = parent,
+#     Node = node,
+#     PathLen = as.numeric(path.len)
+#   )
+#
+#   return(c.df)
+# }
 
-
-getClfData <- function(p2, ann.by.level, name, outfile.path){
-  if ((ann.by.level[[1]] %>% unique %>% length) != 1) {
-    ann.by.level <- list(root=rep("root", length(ann.by.level[[1]])) %>% 
-                           setNames(names(ann.by.level[[1]]))) %>% c(ann.by.level)
-  }
-  
-  ann.by.parent <-  lapply(1:(length(ann.by.level)-1), function(i) 
-    split(ann.by.level[[i+1]], ann.by.level[[i]])) %>%
-    Reduce(c, .) %>% .[sapply(., length) > 5] %>% .[sapply(., function(x) length(unique(x)) > 1)]
-  
-  message("Selecting markers ...")
-  de.info.per.parent <- ann.by.parent %>% #ann: under one parent, cell annotation to its kids for cells only belonging to the given parent.
-    pblapply(function(ann) p2$getDifferentialGenes(groups=ann, z.threshold=0, append.auc=T))
-  
-  pre.selected.markers <- de.info.per.parent %>% lapply(function(dfs)
-    list(
-      positive=lapply(dfs, function(df) as.character(df$Gene[df$Z > 0.001])),
-      negative=lapply(dfs, function(df) as.character(df$Gene[df$Z < -0.001]))
-    )
-  )
-  
-  cm.norm <- p2$counts %>% Matrix::t() #%>% normalizeTfIdfWithFeatures() 
-  marker.info <- names(de.info.per.parent) %>% setNames(., .) %>% lapply(function(n)
-    selectMarkersPerType(cm.norm, ann.by.parent[[n]], pre.selected.markers[[n]],
-                         parent=n,max.iters=50, max.uncertainty=0.25, log.step=5, verbose=1, n.cores=10))
-  
-  marker.list <- setNames(marker.info, NULL) %>% unlist(recursive=F)
-  
-  message("Writing marker list to markup file ...")
-  #Check whether all clusters have markers:
-  if ((marker.list %>% .[sapply(., function(x) length(x$expressed) == 0)] %>% length) >0) {return(NULL)} 
-
-  marker.list %>% .[sapply(., function(x) length(x$expressed) > 0)] %>% markerListToMarkup(file=paste0(outfile.path, "marker_list_", name, ".txt"), 
-                       group.by.parent=F) #I may need to update this function in the future
-  
-  clf.data <- getClassificationData(cm.norm, paste0(outfile.path, "marker_list_", name, ".txt"))  
-  return(clf.data)
-}
+# # TODO: rename it to getClfDataInferringMarkers
+# getClfData <- function(p2, ann.by.level, name, outfile.path){
+#   if ((ann.by.level[[1]] %>% unique %>% length) != 1) {
+#     ann.by.level <- list(root=rep("root", length(ann.by.level[[1]])) %>%
+#                            setNames(names(ann.by.level[[1]]))) %>% c(ann.by.level)
+#   }
+#
+#   ann.by.parent <-  lapply(1:(length(ann.by.level)-1), function(i)
+#     split(ann.by.level[[i+1]], ann.by.level[[i]])) %>%
+#     Reduce(c, .) %>% .[sapply(., length) > 5] %>% .[sapply(., function(x) length(unique(x)) > 1)]
+#
+#   message("Selecting markers ...")
+#   de.info.per.parent <- ann.by.parent %>% #ann: under one parent, cell annotation to its kids for cells only belonging to the given parent.
+#     pblapply(function(ann) p2$getDifferentialGenes(groups=ann, z.threshold=0, append.auc=T))
+#
+#   pre.selected.markers <- de.info.per.parent %>% lapply(function(dfs)
+#     list(
+#       positive=lapply(dfs, function(df) as.character(df$Gene[df$Z > 0.001])),
+#       negative=lapply(dfs, function(df) as.character(df$Gene[df$Z < -0.001]))
+#     )
+#   )
+#
+#   cm.norm <- p2$counts %>% Matrix::t() #%>% normalizeTfIdfWithFeatures()
+#   marker.info <- names(de.info.per.parent) %>% setNames(., .) %>% lapply(function(n)
+#     selectMarkersPerType(cm.norm, ann.by.parent[[n]], pre.selected.markers[[n]],
+#                          parent=n,max.iters=50, max.uncertainty=0.25, log.step=5, verbose=1, n.cores=10))
+#
+#   marker.list <- setNames(marker.info, NULL) %>% unlist(recursive=F)
+#
+#   message("Writing marker list to markup file ...")
+#   #Check whether all clusters have markers:
+#   if ((marker.list %>% .[sapply(., function(x) length(x$expressed) == 0)] %>% length) >0) {return(NULL)}
+#
+#   marker.list %>% .[sapply(., function(x) length(x$expressed) > 0)] %>% markerListToMarkup(file=paste0(outfile.path, "marker_list_", name, ".txt"),
+#                        group.by.parent=F) #I may need to update this function in the future
+#
+#   clf.data <- getClassificationData(cm.norm, paste0(outfile.path, "marker_list_", name, ".txt"))
+#   return(clf.data)
+# }
 
 
 #name: marker file name
-#outfile.path: where to save the marker file
-reAnnoPip <- function(p2, ann.by.level, name, outfile.path, graph=NULL, clf.data=NULL, uncertainty.thresholds=c(coverage=0.5, negative=0.5, positive=0.75)){
-  if (is.null(clf.data)){clf.data <- getClfData(p2, ann.by.level, name, outfile.path)}
-  message("Re-annotation ...")
-  if (is.null(clf.data)) {return(NULL)}
-  ann.by.level <-
-    assignCellsByScores(graph=NULL, clf.data, #The graph is removed here
-                        clusters = NULL, uncertainty.thresholds=uncertainty.thresholds) #we had clusters=p2$clusters$PCA$leiden, but lots of tip clusters dropped after re-annotation, therefore, I reset it to NULL.
-  #saveRDS(ann.by.level, paste0(outfile.path, "ann_by_level_", name, ".rds"))
-  
-  # message("Checking the data ...")
-  # ann.by.level$annotation[[length(ann.by.level$annotation)]]%>%unique() 
-  # ann.by.level$annotation %>% sapply(unique) %>% Reduce(c,.) %>% unique() %>% length() 
-  # 
-  # message("Preparing file for plotting hierarchy ...")
-  # c.df <- annToTreeDf(ann.by.level$annotation)
-  # saveRDS(c.df, file=paste0(outfile.path, "c_df_", name, ".rds")) #For plotting hierarchy
-  
-  return(list(ann.by.level=ann.by.level, clf.data=clf.data))
-}
+# #outfile.path: where to save the marker file
+# reAnnoPip <- function(p2, ann.by.level, name, outfile.path, graph=NULL, clf.data=NULL, uncertainty.thresholds=c(coverage=0.5, negative=0.5, positive=0.75)){
+#   if (is.null(clf.data)){clf.data <- getClfData(p2, ann.by.level, name, outfile.path)}
+#   message("Re-annotation ...")
+#   if (is.null(clf.data)) {return(NULL)}
+#   ann.by.level <-
+#     assignCellsByScores(graph=NULL, clf.data, #The graph is removed here
+#                         clusters = NULL, uncertainty.thresholds=uncertainty.thresholds) #we had clusters=p2$clusters$PCA$leiden, but lots of tip clusters dropped after re-annotation, therefore, I reset it to NULL.
+#   #saveRDS(ann.by.level, paste0(outfile.path, "ann_by_level_", name, ".rds"))
+#
+#   # message("Checking the data ...")
+#   # ann.by.level$annotation[[length(ann.by.level$annotation)]]%>%unique()
+#   # ann.by.level$annotation %>% sapply(unique) %>% Reduce(c,.) %>% unique() %>% length()
+#   #
+#   # message("Preparing file for plotting hierarchy ...")
+#   # c.df <- annToTreeDf(ann.by.level$annotation)
+#   # saveRDS(c.df, file=paste0(outfile.path, "c_df_", name, ".rds")) #For plotting hierarchy
+#
+#   return(list(ann.by.level=ann.by.level, clf.data=clf.data))
+# }
 
 
 
@@ -561,7 +573,7 @@ findLayerMatches <- function(layer, tree){
   for (k in 1:length(tree)) {
     rate <- sum(!is.na(match(unique(tree[[k]]), unique(layer))))/length(union(unique(tree[[k]]), unique(layer)))
     if (rate>match.rate) {
-      matched=k 
+      matched=k
       match.rate=rate}
   }
   return(matched)
@@ -579,7 +591,7 @@ getSelfProjAcc <- function(tree1, tree2){
       matched=findLayerMatches(m, tree1)
       acc <- c(acc, sum(m==tree1[[matched]])/length(m))} #== only apply to two vectors with equal lengths
     return(acc)}
-  
+
   for (m in tree1){
     meassage("The first tree is simpler.")
     matched=findLayerMatches(m, tree2)
@@ -590,7 +602,7 @@ getSelfProjAcc <- function(tree1, tree2){
 
 #Calculating accuracy for re-annotation results (comparing the annotation before and after the re-annotation)
 #The annotation before the re-annotation is considered to be the groundtruth annotation
-#Here, tree1 is always the original annotation tree (assumed to be truth), while tree2 is always the simpler one (less layers) 
+#Here, tree1 is always the original annotation tree (assumed to be truth), while tree2 is always the simpler one (less layers)
 measureQ <- function(len, start, tree1, tree2, verbose=F){
   conm <- lapply (start:len%>%setNames(paste0("l", start:len)), function(m) {
     matched.index=findLayerMatches(tree2[[m]], tree1) #find the matched layer of tree2 in tree1
@@ -599,7 +611,7 @@ measureQ <- function(len, start, tree1, tree2, verbose=F){
       positive <- matched[matched==c] %>% names #The cells belong to cluster c in the orginal annotation-tree tree1 (supposed to be the truth)
       for (parent0 in split(tree1[[m+1]], tree1[[m]])) {
         if (c %in% unique(parent0)) mother=parent0} #positive and negative should be under the same parent.
-      
+
       negative <- mother[!(mother==c)] %>% names  #The negative ones are those under the same parent but in different clusters in the original tree
       if ((length(negative)==0) && (verbose==T)) warning("There are no negative cells for cluster ", c, " because its parent is a singleton! ")
       predicted <- tree2[[m]][tree2[[m]]==c] %>% names
@@ -618,10 +630,10 @@ measureQ <- function(len, start, tree1, tree2, verbose=F){
 #Function for calculating the per-cluster self-projection accuracy for each layer of the simpler one of two compared trees
 getSelfProjQcPerCluster <- function(tree1, tree2){ #Please provide the original annotation-tree as tree1 and the predicted annotation-tree as tree2
   if (length(unique(tree1[[1]]))>1) {tree1 <- c(list(root=rep("root", length(tree1[[1]]))%>%setNames(., names(tree1[[1]]))), tree1)}
-  
+
   len1 <- length(tree1)-1
   len2 <- if (length(unique(tree2[[1]]))==1) length(tree2)-1 else length(tree2)
-  
+
   if (len1>=len2){
     message("The second tree is simpler.")
     start <- if (len2<length(tree2)) 2 else 1
@@ -644,27 +656,27 @@ plotUcHierarchy <- function(c.data, trait.file, layout="slanted", xlims=NULL, fo
   if (!requireNamespace("ggtree", quietly=T))
     stop("You need to install package 'ggtree' to be able to plot hierarchical tree. ",
          "`Try devtools::install_github('YuLab-SMU/ggtree')`")
-  
+
   c.df <- classificationTreeToDf(c.data$classification.tree)
   cg <- c.df %$% data.frame(parent=Parent, node=Node) %>% ape::as.phylo() #as.phylo(): we got edge, Nnode, node.label, tip.label (c.df only has parent and node)
   cg$edge.length <- rep(1, nrow(cg$edge))
-  
+
   if (is.null(xlims)) {
     xlims <- c(0, max(c.df$PathLen) + 0.5)
   }
-  
+
   tf <- trait.file
   names(tf)[1] <- "labels"
   tf$labels <- gsub(" ", "", tf[,1])
-  
+
   tipid <- cg$tip.label %>% data.frame("labels"=., "node"=ggtree::nodeid(cg, .)) #get tip id
   nodeid <- cg$node.label %>% data.frame("labels"=., "node"=ggtree::nodeid(cg, .)) #get label id
   id <- rbind(tipid, nodeid) %>% as.data.frame()
-  
+
   tfid <- merge(tf, id, by="labels")
   tfid$node <- as.numeric(tfid$node)
   cgtree <- dplyr::full_join(cg, tfid, by="node")
-  
+
   a <- ggtree::ggtree(cgtree, aes(color=positive), layout = layout, ...) +
     scale_color_gradientn(colours=c("dark blue", "dark green", "dark orange", "red"), limits=col.range)+
     ggtree::geom_label2(ggplot2::aes(label=c(cg$tip.label, cg$node.label)[node]), size=font.size) +
@@ -693,11 +705,11 @@ plotTypeHierarchyLi <- function(classification, layout="slanted", xlims=NULL, fo
     c.df <- classification
     cg <- c.df %$% data.frame(parent=Parent, node=Node) %>% ape::as.phylo()
     cg$edge.length <- rep(1, nrow(cg$edge))
-    
+
     if (is.null(xlims)) {
       xlims <- c(0, max(c.df$PathLen) + 0.5)
     }
-    
+
     ggtree::ggtree(cg, layout = layout, color=col,  ...) +
       ggtree::geom_rootpoint() +
       ggtree::geom_label2(ggplot2::aes(label=c(cg$tip.label, cg$node.label)[node]), size=font.size, color=col) +
@@ -725,8 +737,154 @@ uncToTreeTrait <- function(unc.per.cell, ann.by.level) {
       rbinded <- rbind(rbinded, ann.unc[[l]])
     }
   }
-  
+
   ann.unc <- rbinded
   ann.unc %<>% .[!duplicated(ann.unc$type),]
   return (ann.unc)
 }
+
+
+
+#Here, we use correlation coefficient of two cells/clusters for measuring their cells
+#Since snRNA-seq does not follow normal distribution, therefore we will use non-parametric spearman correlation, rather than pearson correlation.
+getHcHierTrunc <- function(p2, trunc.quantile=0.985, min.cluster.size=6){
+  feature.matrix=p2$reductions$PCA
+  c.dist <- (1 - cor(Matrix::t(feature.matrix), method="spearman")) %>% as.dist() #as.dist(), only oen side 	of the diagonal is maintained
+  #for cor(), the default method="pearson", which is suitable for variables that are both normally distributed, which is however not the case for snRNA-seq, therefore, the non-parametric methods "spearman" should be more proper
+  #Distance between cells*************
+  clusts <- hclust(c.dist, method="ward.D2") #The default method = "complete": Minimize the maximum distance between two points in different clusters (farthest neighbour), other method options:  METHODS <- c("ward.D", "single", "complete", "average", "mcquitty", "median", "centroid", "ward.D2")
+  #I wanted to use "centroid", however, it is not leading to a monotone distance measure, or equivalently the resulting dendrograms can have so called inversions or reversals which are hard to interpret.
+  #Therefore, I will choose "ward.D2", Ward's minimum variance ( Minimize the squared euclidian distances to the cluster means) method aims at finding compact, spherical clusters
+  #ward.D2 implement Ward's (1963) clustering criterion (while "ward" does not)
+  #Distance between clusters******************
+  #trunc.quantile: where to the truncate the tree, e.g. 0.985 quantile
+  cut <- quantile(clusts$height, trunc.quantile)
+  h <- clusts$height[clusts$height>cut[[1]]] %>% rev()
+  clusts.hc <- cutree(clusts, h=h) %>% as.matrix() #get a tree with all the layers I want to keep for now.
+
+  # Rename each layer as l1, l2 ..., and rename the clusters at each layer as l1_1, l1_2, l1_3 ....
+  for (i in 1:ncol(clusts.hc)) {
+    clusts.hc[,i] %<>% paste0("l", i, "_", .)
+  }
+
+  # At each cutting line, this program assign all the cells to the available clusters at the cutting lines.
+  # Here the output is like the annotation at different layers, though in the format of a matrix
+  clusts.hc %<>% cbind(rownames(.)) %>% `colnames<-`(paste0("l", 1:ncol(.))) %>% 	tibble::as_tibble()
+
+  message("Change the matrix/Table to list ...")
+  hierarchy.hc <- splitClusteringDf(clusts.hc) %>% simplifyHierarchy()
+
+  # Get ann.by.level
+  ann.by.level <- list()
+  layers.no <- ncol(clusts.hc)
+  ann.by.level[["root"]] <- rep("root", length(clusts.hc[,1][[1]])) %>% setNames(., 	clusts.hc[,layers.no][[1]])
+  for (layer in 2:(layers.no-1)) {
+    name <- colnames(clusts.hc[,layer])
+    ann.by.level[[name]] <- clusts.hc[,layer][[1]] %>% setNames(., 	clusts.hc[,layers.no][[1]])
+  }
+  message("Now the ann.by.level has been created ...")
+  message("Simply ann.by.level ...")
+  ann.by.level <- treePrunePrep(ann.by.level, min.cluster.size=min.cluster.size)
+
+  return(ann.by.level)
+}
+
+#Read in the "self.proj.acc", "conf.rate.norm" results from the parentfortrimkid.txt file
+parseConfFile <- function(file.path){
+  lines <- readLines(file.path)
+  acc.conf <- list()
+  n=0
+  for (i in 1:length(lines)) {
+    if (strsplit(lines[i], " ", fixed=T) %>% sapply(`[[`,1)=="#"){
+      if (n==1){
+        pn <- length(block)/5
+        lp <- list()
+        for (j in 1:pn) {
+          parent <- block[5*j-4]
+          lp <- c(lp, list(setNames(block[(5*j-1):(5*j)]%>%as.numeric, block[(5*j-3):(5*j-2)]))%>%setNames(parent))}
+        acc.conf = c(acc.conf, list(lp)%>%setNames(layer))
+      }
+      layer <- strsplit(lines[i], " ", fixed=T) %>% sapply(`[[`,2);
+      n=1;
+      block <- c()} else{
+        block <- c(block, strsplit(lines[i], " ", fixed=T)[[1]])}
+    if (i==length(lines)){
+      pn <- length(block)/5
+      lp <- list()
+      for (j in 1:pn) {
+        parent=block[5*j-4];
+        lp <- c(lp, list(setNames(block[(5*j-1):(5*j)]%>%as.numeric, block[(5*j-3):(5*j-2)]))%>%setNames(parent))}
+      acc.conf = c(acc.conf, list(lp)%>%setNames(layer))}
+  }
+  return(acc.conf)
+}
+
+#Cut kids and the tree below off if normalized confusion rate of a parent >0.3
+treeTruncate <- function(parent, ann.by.level, layer.index){
+  depth <- names(ann.by.level)%>%length()
+  layer <- ann.by.level[[layer.index]]
+  cells.p <- layer[layer==parent] %>% names
+  for (i in (layer.index+1):depth) {
+    ann.by.level[[i]][cells.p] <- layer[cells.p]}
+  return(ann.by.level)
+}
+
+#Repeat treeCut through the entire tree
+treeTruncates <- function(ann.by.level, acc.conf, conf.thresh){
+  for (l in 1:(length(ann.by.level)-1)){
+    for (k in unique(ann.by.level[[l]])){
+      if ((k %in% names(acc.conf)) && acc.conf[[k]][2]>conf.thresh){
+        ann.by.level <- treeTruncate(k, ann.by.level, l)}
+    }
+  }
+  tree.depth <- length(ann.by.level)
+  for (i in tree.depth:2) { #remove repeated layers
+    tip.layer.index <- i
+    if (length(ann.by.level[[i]]%>%unique %>% setdiff(ann.by.level[[i-1]]%>%unique))==0) {
+      tip.layer.index <- i-1
+    } else {break}
+  }
+  ann.by.level %<>% .[1:tip.layer.index]
+  return(ann.by.level)
+}
+
+
+#withdraw each quality parameters from the output of measureQ() for each clusters (unique) of one entire tree
+getSPQcEle <- function(self.proj.qc, row.index){
+  len <- length(self.proj.qc)
+  ele <- 1:(len-1) %>% sapply(function(l) {
+    ltypes <- setdiff(self.proj.qc[[l]]%>%colnames, self.proj.qc[[len]]%>%colnames)
+    self.proj.qc[[l]][row.index, ltypes]%>%Reduce(c,.)})
+  self.proj.qc[[len]][row.index, ]%>%Reduce(c,.)
+  return(c(ele%>%Reduce(c,.), self.proj.qc[[len]][row.index, ]%>%Reduce(c,.)))
+}
+
+
+# #Self Projection Quality Control
+# #annotation.before <- p4$clusters$PCA$leiden #annotation before re-annotation (reAnnoPip)
+# #annotation.after <- reann.p4$ann.by.level$annotation$l1 #annotation after re-annotation (reAnnoPip)
+# #This is used for the self projection quaility control after re-annotating the leiden-clustering-based hierarchy
+# selfProjQCperCluster <- function(annotation.before, annotation.after) {
+#   #Get self projection accuracy:
+#   acc <- sum(annotation.before == annotation.after)/length(annotation.before) #The annotation before and after need to have the same length.
+#   #Get confusion rate (FP/TP): the cluster sample sized is balanced by adjusting weights inversely proportional to class frequencies in the input data
+#   clusters <- unique(annotation.before)
+#   conf.fpr <- sapply(clusters, function(x) {
+#     wei.x <- length(annotation.before)/table(annotation.before)[x]
+#     wei.other <- 1/(1-(1/wei.x))
+#     positive <- annotation.before%>%.[.==x] %>% names
+#     negative <- names(annotation.before) %>% setdiff(positive)
+#     predicted <- annotation.after%>%.[.==x] %>% names
+#     true.positive <- positive[!is.na(match(positive, predicted))]
+#     false.positive <- negative[!is.na(match(negative, predicted))]
+#     #Balanced confusion rate
+#     conf <- (length(false.positive)*wei.other)/(length(true.positive)*wei.x)
+#     #False positive rate
+#     fpr <- length(false.positive)/length(negative)
+#     c(conf=conf, fpr=fpr)
+#   })
+#   colnames(conf.fpr) <- clusters
+#   rownames(conf.fpr) <- c("conf", "fpr")
+#   return(list(accuracy=acc, confusion.rate.false.pos.rate=conf.fpr))
+# }
+
