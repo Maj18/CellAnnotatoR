@@ -382,7 +382,7 @@ selectMarkersPerType <- function(cm.norm, annotation, markers.per.type, marker.l
 
     # Get one positive marker, which minimizes uncertainty per this cell type. Can be accompanied by 1-2 negative markers.
     m.update <- getNextMarkers(cell.type, cm.norm, annotation, marker.list=marker.list, markers.per.type=markers.per.type,
-                               verbose=(verbose > 1), n.cores=n.cores)
+                               verbose=(verbose > 1), n.cores=n.cores) #markers.per.type: pre-select markers #marker.list:empty, to be filled
 
     # Update current marker list
     marker.list.new <- marker.list

@@ -627,121 +627,26 @@ measureQ <- function(len, start, tree1, tree2, verbose=F){
 }
 
 
-#Function for calculating the per-cluster self-projection accuracy for each layer of the simpler one of two compared trees
-getSelfProjQcPerCluster <- function(tree1, tree2){ #Please provide the original annotation-tree as tree1 and the predicted annotation-tree as tree2
-  if (length(unique(tree1[[1]]))>1) {tree1 <- c(list(root=rep("root", length(tree1[[1]]))%>%setNames(., names(tree1[[1]]))), tree1)}
+# #Function for calculating the per-cluster self-projection accuracy for each layer of the simpler one of two compared trees
+# getSelfProjQcPerCluster <- function(tree1, tree2){ #Please provide the original annotation-tree as tree1 and the predicted annotation-tree as tree2
+#   if (length(unique(tree1[[1]]))>1) {tree1 <- c(list(root=rep("root", length(tree1[[1]]))%>%setNames(., names(tree1[[1]]))), tree1)}
+#
+#   len1 <- length(tree1)-1
+#   len2 <- if (length(unique(tree2[[1]]))==1) length(tree2)-1 else length(tree2)
+#
+#   if (len1>=len2){
+#     message("The second tree is simpler.")
+#     start <- if (len2<length(tree2)) 2 else 1
+#     return(measureQ(len2, start, tree1, tree2))
+#   }
+#   #When len1<len2:
+#   message("The original tree is simpler.")
+#   start <- if (len1<length(tree1)) 2 else 1
+#   return(measureQ(len1, start, tree2, tree1))
+# }
+#
+#
 
-  len1 <- length(tree1)-1
-  len2 <- if (length(unique(tree2[[1]]))==1) length(tree2)-1 else length(tree2)
-
-  if (len1>=len2){
-    message("The second tree is simpler.")
-    start <- if (len2<length(tree2)) 2 else 1
-    return(measureQ(len2, start, tree1, tree2))
-  }
-  #When len1<len2:
-  message("The original tree is simpler.")
-  start <- if (len1<length(tree1)) 2 else 1
-  return(measureQ(len1, start, tree2, tree1))
-}
-
-
-#Plot uncertainty on trees
-#' Plot uncertainty (positive, negative, coverage) on hierarchical trees
-#' @param c.data output file from re-annotation (by assignCellsByScores())
-#' @param trait.file contain the mean positive, negative, coverage uncertainties for each cell type (including root, node and tips)
-#' @param unc one of c("positive", "negative", "coverage")
-#' @export
-plotUcHierarchy <- function(c.data, trait.file, layout="slanted", xlims=NULL, font.size=3, col.range=c(0,1), ...) {
-  if (!requireNamespace("ggtree", quietly=T))
-    stop("You need to install package 'ggtree' to be able to plot hierarchical tree. ",
-         "`Try devtools::install_github('YuLab-SMU/ggtree')`")
-
-  c.df <- classificationTreeToDf(c.data$classification.tree)
-  cg <- c.df %$% data.frame(parent=Parent, node=Node) %>% ape::as.phylo() #as.phylo(): we got edge, Nnode, node.label, tip.label (c.df only has parent and node)
-  cg$edge.length <- rep(1, nrow(cg$edge))
-
-  if (is.null(xlims)) {
-    xlims <- c(0, max(c.df$PathLen) + 0.5)
-  }
-
-  tf <- trait.file
-  names(tf)[1] <- "labels"
-  tf$labels <- gsub(" ", "", tf[,1])
-
-  tipid <- cg$tip.label %>% data.frame("labels"=., "node"=ggtree::nodeid(cg, .)) #get tip id
-  nodeid <- cg$node.label %>% data.frame("labels"=., "node"=ggtree::nodeid(cg, .)) #get label id
-  id <- rbind(tipid, nodeid) %>% as.data.frame()
-
-  tfid <- merge(tf, id, by="labels")
-  tfid$node <- as.numeric(tfid$node)
-  cgtree <- dplyr::full_join(cg, tfid, by="node")
-
-  a <- ggtree::ggtree(cgtree, aes(color=positive), layout = layout, ...) +
-    scale_color_gradientn(colours=c("dark blue", "dark green", "dark orange", "red"), limits=col.range)+
-    ggtree::geom_label2(ggplot2::aes(label=c(cg$tip.label, cg$node.label)[node]), size=font.size) +
-    ggplot2::xlim(xlims) #the presence or absence of [node] makes no difference here
-  b <- ggtree::ggtree(cgtree, aes(color=negative), layout = layout, ...) +
-    scale_color_gradientn(colours=c("dark blue", "dark green", "dark orange", "red"), limits=col.range)+
-    ggtree::geom_label2(ggplot2::aes(label=c(cg$tip.label, cg$node.label)[node]), size=font.size) +
-    ggplot2::xlim(xlims)
-  c <- ggtree::ggtree(cgtree, aes(color=coverage), layout = layout, ...) +
-    scale_color_gradientn(colours=c("dark blue", "dark green", "dark orange", "red"), limits=col.range)+
-    ggtree::geom_label2(ggplot2::aes(label=c(cg$tip.label, cg$node.label)[node]), size=font.size) +
-    ggplot2::xlim(xlims)
-  cowplot::plot_grid(a, b, c, nrow=1)
-}
-
-
-#' @param classificaiton should be either classificaiton.tree or a classification dataframe
-#' @export
-plotTypeHierarchyLi <- function(classification, layout="slanted", xlims=NULL, font.size=3, col="black", ...) { #modified from Viktor's function
-  if (!requireNamespace("ggtree", quietly=T))
-    stop("You need to install package 'ggtree' to be able to plot hierarchical tree. ",
-         "`Try devtools::install_github('YuLab-SMU/ggtree')`")
-  if (!is.data.frame(classification)){
-    c.df <- classificationTreeToDf(classification)
-  } else{
-    c.df <- classification
-    cg <- c.df %$% data.frame(parent=Parent, node=Node) %>% ape::as.phylo()
-    cg$edge.length <- rep(1, nrow(cg$edge))
-
-    if (is.null(xlims)) {
-      xlims <- c(0, max(c.df$PathLen) + 0.5)
-    }
-
-    ggtree::ggtree(cg, layout = layout, color=col,  ...) +
-      ggtree::geom_rootpoint() +
-      ggtree::geom_label2(ggplot2::aes(label=c(cg$tip.label, cg$node.label)[node]), size=font.size, color=col) +
-      ggplot2::xlim(xlims)
-  }
-}
-
-
-#' Prepare the "trait" file for plotUncHierarchy() from the positive, negative and coverage uncertainty data (output from scoreCellUncertaintyPerLevel())
-#' @param unc.per.cell a list, each element represents the annotation of all cells at on hierarchical level
-#' @param ann.by.level a list of lists, each main element is one hierarchical level; at each hierarchical level, there is a sublist, which contains 3 elements: positive, negative and coverage uncertainty.
-#' @export ann.unc a dataframe, there are 4 columns:"type" #cell types   "positive" "negative" "coverage" #uncertainty
-uncToTreeTrait <- function(unc.per.cell, ann.by.level) {
-  ann.unc <- list()
-  for (i in names(unc.per.cell) %>% setNames(.,.)) {
-    ann.unc[[i]] <- merge(as.data.frame(ann.by.level$annotation[[i]]), as.data.frame(unc.per.cell[[i]]),
-                          by="row.names", all=TRUE)
-    names(ann.unc[[i]])[2] <- "type"
-    ann.unc[[i]] <- aggregate(ann.unc[[i]][,3:5], ann.unc[[i]][,2,drop=FALSE], mean)
-  }
-  rbinded <- rbind(ann.unc[[1]], ann.unc[[2]])
-  L <- names(ann.unc) %>% length()
-  if (L>2) {
-    for (l in 3:L){
-      rbinded <- rbind(rbinded, ann.unc[[l]])
-    }
-  }
-
-  ann.unc <- rbinded
-  ann.unc %<>% .[!duplicated(ann.unc$type),]
-  return (ann.unc)
-}
 
 
 
