@@ -289,7 +289,7 @@ generateFilteredMarkerLists <- function(marker.list) {
 }
 
 getMeanConfidencePerType <- function(marker.list, cm.norm, annotation) {
-  c.scores <- lapply(marker.list, getCellTypeScoreInfo, cm.norm) %>% #there must be 2 types/columns
+  c.scores <- lapply(marker.list, getCellTypeScoreInfo, cm.norm) %>% #there must be 2 types/columns #Here, we get a list of clusters, each with pos, neg and ..., each with a list of cells...
     lapply(`[[`, "scores") %>% as.data.frame(optional=T) %>% normalizeScores()
   confidence <- getAnnotationConfidence(annotation, c.scores)
   return(confidence %>% split(annotation[names(.)]) %>% sapply(mean))
