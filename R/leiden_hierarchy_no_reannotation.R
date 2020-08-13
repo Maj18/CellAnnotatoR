@@ -1,3 +1,5 @@
+#leiden_hierarchy_no_reannotation.R
+
 # max.pos.markers=10
 # TODO: sort the functions
 # Building leiden clustering based hirarchy start here
@@ -39,7 +41,7 @@ getClfDataInferringMarkers <- function(p2, ann.by.level, name, outfile.path){
   if (length(ann.by.level)==1 && (ann.by.level[[1]] %>% unique %>% length)==1) return(NULL)
   if ((ann.by.level[[1]] %>% unique %>% length) != 1) {
     ann.by.level <- list(root=rep("root", length(ann.by.level[[1]])) %>%
-                    setNames(names(ann.by.level[[1]]))) %>% c(ann.by.level)
+                           setNames(names(ann.by.level[[1]]))) %>% c(ann.by.level)
   }
 
   ann.by.parent <-  lapply(1:(length(ann.by.level)-1), function(i)
@@ -47,17 +49,17 @@ getClfDataInferringMarkers <- function(p2, ann.by.level, name, outfile.path){
     .[sapply(., length) > 5] %>% .[sapply(., function(x) length(unique(x)) > 1)]
 
   if ((ann.by.parent %>% .[sapply(., function(c) length(unique(c))==1)] %>% length) > 0)
-                                                                          {return(NULL)}
+  {return(NULL)}
 
   marker.list <- selectMarkersByParent(p2, ann.by.parent, z.threshold=0, append.auc=T,
-        max.iters=50, max.uncertainty=0.25, max.pos.markers=10, log.step=5, verbose=1, n.cores=10)
+                                       max.iters=50, max.uncertainty=0.25, max.pos.markers=10, log.step=5, verbose=1, n.cores=10)
 
   if (is.null(marker.list)) {return(NULL)}
 
   message("Check whether all clusters have markers: ")
   if ((marker.list %>% .[sapply(., function(x) length(x$expressed) == 0)] %>% length) >0){
-                             return(NULL)
-    }
+    return(NULL)
+  }
   marker.list %>% .[sapply(., function(x) length(x$expressed) > 0)] %>%
     markerListToMarkup(file=paste0(outfile.path, "marker_list_", name, ".txt"), group.by.parent=F)
 
@@ -70,7 +72,7 @@ getClfDataInferringMarkers <- function(p2, ann.by.level, name, outfile.path){
 
 
 selectMarkersByParent <- function(p2, ann.by.parent, z.threshold=0, append.auc=T, max.iters=50,
-                         max.uncertainty=0.25, max.pos.markers=2, log.step=5, verbose=1, n.cores=1){
+                                  max.uncertainty=0.25, max.pos.markers=2, log.step=5, verbose=1, n.cores=1){
   message("Selecting markers for clusters under the same parents ...")
   de.info.per.parent <- ann.by.parent %>%
     pblapply(function(ann) p2$getDifferentialGenes(groups=ann, z.threshold=0, append.auc=T))
@@ -87,7 +89,7 @@ selectMarkersByParent <- function(p2, ann.by.parent, z.threshold=0, append.auc=T
   cm.norm <- p2$counts %>% Matrix::t() #%>% normalizeTfIdfWithFeatures()
   marker.info <- names(de.info.per.parent) %>% setNames(., .) %>% lapply(function(n)
     selectMarkersPerType(cm.norm, ann.by.parent[[n]], pre.selected.markers[[n]],
-    parent=n, max.iters=50, max.uncertainty=0.25, max.pos.markers=2, log.step=5, verbose=1, n.cores=10))
+                         parent=n, max.iters=50, max.uncertainty=0.25, max.pos.markers=2, log.step=5, verbose=1, n.cores=10))
 
   marker.list <- setNames(marker.info, NULL) %>% unlist(recursive=F)
 
@@ -98,7 +100,7 @@ selectMarkersByParent <- function(p2, ann.by.parent, z.threshold=0, append.auc=T
 
 #Outfile.path: where to save the marker file
 reAnnoPip <- function(p2, ann.by.level, name, outfile.path, graph=NULL, clf.data=NULL,
-          clusters = NULL, uncertainty.thresholds=c(coverage=0.5, negative=0.5, positive=0.75)){
+                      clusters = NULL, uncertainty.thresholds=c(coverage=0.5, negative=0.5, positive=0.75)){
   #Check small clusters (< 6 cells)
   #TODO: to generalize this:
   if (sum((ann.by.level[[1]] %>% table) < 6) > 0) {return(NULL)} #only one layer allowed
@@ -113,7 +115,7 @@ reAnnoPip <- function(p2, ann.by.level, name, outfile.path, graph=NULL, clf.data
   message("Re-annotation ...")
   ann.by.level <-
     assignCellsByScores(graph=NULL, clf.data=clf.data, score.info=NULL,
-                                    clusters=NULL, verbose=0, uncertainty.thresholds, max.depth=NULL)
+                        clusters=NULL, verbose=0, uncertainty.thresholds, max.depth=NULL)
 
   return(list(ann.by.level=ann.by.level, clf.data=clf.data))
 }
@@ -157,8 +159,8 @@ reAnnotationQC <- function(reann, p, sp.thresholds,
 
 
 getBigClusters <- function(sub.graph, p.left, p.right, p.right.old, res.left, res.right, res.right.old,
-            reann.right.old, out.name, outfile.path, graph=NULL, clf.data=NULL, clusters=NULL,
-            uncertainty.thresholds=c(coverage=0.5, negative=0.5, positive=0.75), type="PCA",
+                           reann.right.old, out.name, outfile.path, graph=NULL, clf.data=NULL, clusters=NULL,
+                           uncertainty.thresholds=c(coverage=0.5, negative=0.5, positive=0.75), type="PCA",
                            method=conos::leiden.community, n.iterations=50, name="leiden"){
   n = 0
   while (sum((p.right$clusters$PCA$leiden %>% table) < 6) > 0){
@@ -178,15 +180,15 @@ getBigClusters <- function(sub.graph, p.left, p.right, p.right.old, res.left, re
   if (n>0){
     if (length(p.right.old$clusters$PCA$leiden %>% table)==1){
       reann.right.old <- list(ann.by.level=list(annotation=list(l1=p.right.old$clusters$PCA$leiden)),
-                         clf.data=list(marker.list=list()))
+                              clf.data=list(marker.list=list()))
     } else{
       reann.right.old <- reAnnoPip(p.right.old, list(l=p.right.old$clusters$PCA$leiden),
-                           out.name, outfile.path, graph, clf.data, clusters, uncertainty.thresholds)
+                                   out.name, outfile.path, graph, clf.data, clusters, uncertainty.thresholds)
     }
   }
 
   return(list(p.left=p.left, p.right=p.right, p.right.old=p.right.old, res.left=res.left,
-                      res.right=res.right, res.right.old=res.right.old, reann.right.old=reann.right.old))
+              res.right=res.right, res.right.old=res.right.old, reann.right.old=reann.right.old))
 }
 
 
@@ -274,12 +276,12 @@ tailorResRange <- function(sub.graph, p.left, reann.left, res.min, res.max, res.
 
 #Main function 2
 getNextLayerKnnClusters <- function(p2, annotation, out.name, outfile.path, min.res.start=0,
-                           graph=NULL, res.max.update=1, clf.data=NULL,
-                           uncertainty.thresholds=c(coverage=0.5, negative=0.5, positive=0.75),
-                           max.res.middle=1, res.switch=0.1, type="PCA",
-                           method=conos::leiden.community, n.iterations=10, name="leiden",
-                           sp.thresholds=list(accuracy=0.85, confusion.rate=3/17),
-                           clustering.type=NULL, embeding.type=NULL){
+                                    graph=NULL, res.max.update=1, clf.data=NULL,
+                                    uncertainty.thresholds=c(coverage=0.5, negative=0.5, positive=0.75),
+                                    max.res.middle=1, res.switch=0.1, type="PCA",
+                                    method=conos::leiden.community, n.iterations=10, name="leiden",
+                                    sp.thresholds=list(accuracy=0.85, confusion.rate=3/17),
+                                    clustering.type=NULL, embeding.type=NULL){
   ann.by.parents <- list()
   marker.list <- list()
   ann.by.cluster <- split(annotation, annotation)
@@ -288,16 +290,16 @@ getNextLayerKnnClusters <- function(p2, annotation, out.name, outfile.path, min.
     #Split the graph for clustering
     sub.graph <- igraph::induced_subgraph(p2$graphs$PCA, ann.by.cluster[cl][[1]]%>%names)
     p <- p2$misc$rawCounts[ann.by.cluster[cl][[1]]%>%names,] %>% Matrix::t() %>%
-         vpscutils::GetPagoda(clustering.type, embeding.type, n.cores=1) #Withdraw data subset for cl.
+      vpscutils::GetPagoda(clustering.type, embeding.type, n.cores=1) #Withdraw data subset for cl.
     #clustering based on subgraph.
     sub.clusters <- conos::leiden.community(sub.graph, resolution=min.res.start, n.iterations=50)
     p$clusters$PCA$leiden <- sub.clusters$membership
 
     p.left <- p
     reann.left <- list(ann.by.level=list(annotation=list(l1=p.left$clusters$PCA$leiden)),
-                  clf.data=list(marker.list=list())) #Build reann.left manually
+                       clf.data=list(marker.list=list())) #Build reann.left manually
     new.res.range <- tailorResRange(sub.graph, p.left, reann.left, res.min=min.res.start, res.max=max.res.middle, res.switch, out.name,
-          outfile.path, graph, res.max.update, clf.data, clusters, uncertainty.thresholds, sp.thresholds)
+                                    outfile.path, graph, res.max.update, clf.data, clusters, uncertainty.thresholds, sp.thresholds)
     p.left <- new.res.range$p.left
     p.right <- new.res.range$p.right
     reann.left <- new.res.range$reann.left #Must pass self projection QC, #match p.left
@@ -306,8 +308,8 @@ getNextLayerKnnClusters <- function(p2, annotation, out.name, outfile.path, min.
     res.right <- new.res.range$res.max
 
     best.res <- findBestRes(sub.graph, p.left, p.right, reann.left, reann.right, res.left, res.right, out.name,
-             outfile.path, res.switch, type="PCA", sp.thresholds, method, n.iterations, name, graph,
-             clf.data, uncertainty.thresholds)
+                            outfile.path, res.switch, type="PCA", sp.thresholds, method, n.iterations, name, graph,
+                            clf.data, uncertainty.thresholds)
     reann.left <- best.res$reann.left
     p.left <- best.res$p.left
 
@@ -315,10 +317,10 @@ getNextLayerKnnClusters <- function(p2, annotation, out.name, outfile.path, min.
     if ((p.left$clusters$PCA$leiden %>% table %>% length) > 1
         && sum((p.left$clusters$PCA$leiden %>% table)<6)==0){
       annotation <- p.left$clusters$PCA$leiden %>% sapply(function(n) paste0(cl,"_", n)) %>%
-                                              setNames(p.left$clusters$PCA$leiden %>% names)
+        setNames(p.left$clusters$PCA$leiden %>% names)
       ann.by.parents <- c(ann.by.parents, list(annotation) %>% setNames(cl))
       marker.list.cl <- reann.left$clf.data$marker.list %>% lapply(function(sub.clust) {sub.clust$"parent"=cl
-                        sub.clust})
+      sub.clust})
       marker.list <- c(marker.list, list(marker.list.cl) %>% setNames(cl))
     }
   }
@@ -331,10 +333,10 @@ getNextLayerKnnClusters <- function(p2, annotation, out.name, outfile.path, min.
 #Main function 3
 #Look for the maximum resolution (e.g. the maximum number of predicted clusters) that have its predicted clusters all pass quality control (self projection accuracy via re-annotation: confusion rate)
 findBestRes <- function(sub.graph, p.left, p.right, reann.left, reann.right, res.left,
-               res.right, out.name, outfile.path, res.switch=0.1, type="PCA",
-               sp.thresholds=list(accuracy=0.85, confusion.rate=3/17), method=conos::leiden.community,
-               n.iterations=10, name="leiden", graph=NULL, clf.data=NULL,
-               uncertainty.thresholds=c(coverage=0.5, negative=0.5, positive=0.75)){
+                        res.right, out.name, outfile.path, res.switch=0.1, type="PCA",
+                        sp.thresholds=list(accuracy=0.85, confusion.rate=3/17), method=conos::leiden.community,
+                        n.iterations=10, name="leiden", graph=NULL, clf.data=NULL,
+                        uncertainty.thresholds=c(coverage=0.5, negative=0.5, positive=0.75)){
   message("sp.thresholds, res.switch ", sp.thresholds, " ", "res.switch")
   if ((res.right-res.left)<=res.switch) {
     return(list(p.left=p.left, reann.left=reann.left, res.left=res.left, res.right=res.right))
@@ -345,9 +347,9 @@ findBestRes <- function(sub.graph, p.left, p.right, reann.left, reann.right, res
     stop("Something is wrong here, reann.right must not pass reAnnotation QC....")}
   message("Now, we are heading to the left for the next smallest resolution ...")
   to.left <- findNextSmallestRes(sub.graph, p.left, p.right, p.right.old=p.right,
-             reann.left, reann.right, reann.right.old=reann.right, res.left, res.right,
-             res.right.old=res.right, out.name, outfile.path, res.switch, type="PCA", method,
-             n.iterations, name, graph, clf.data, clusters, uncertainty.thresholds, sp.thresholds)
+                                 reann.left, reann.right, reann.right.old=reann.right, res.left, res.right,
+                                 res.right.old=res.right, out.name, outfile.path, res.switch, type="PCA", method,
+                                 n.iterations, name, graph, clf.data, clusters, uncertainty.thresholds, sp.thresholds)
   p.left <-  to.left$p.left  #pass QC
   p.right <- to.left$p.right  #not pass QC
   reann.left <- to.left$reann.left #This must be a good one. Pass QC
@@ -358,9 +360,9 @@ findBestRes <- function(sub.graph, p.left, p.right, reann.left, reann.right, res
   if ((res.right-res.left)>res.switch){
     message("Now, we are heading to the right for the next biggest resolution ...")
     to.right <- findNextBiggestRes(sub.graph, p.left, p.left.old=p.left, p.right, reann.left,
-                reann.left.old=reann.left, reann.right, res.left, res.left.old=res.left,
-                res.right, out.name, outfile.path, res.switch, type="PCA", method, n.iterations,
-                name, graph, clf.data, clusters, uncertainty.thresholds, sp.thresholds)
+                                   reann.left.old=reann.left, reann.right, res.left, res.left.old=res.left,
+                                   res.right, out.name, outfile.path, res.switch, type="PCA", method, n.iterations,
+                                   name, graph, clf.data, clusters, uncertainty.thresholds, sp.thresholds)
     p.left <- to.right$p.left
     p.right <- to.right$p.right
     res.left <- to.right$res.left #the highest res that work
@@ -379,10 +381,10 @@ findBestRes <- function(sub.graph, p.left, p.right, reann.left, reann.right, res
 
 #Main function 4
 findNextSmallestRes <- function(sub.graph, p.left, p.right, p.right.old, reann.left, reann.right,
-            reann.right.old, res.left, res.right,res.right.old, out.name, outfile.path, res.switch=0.1,
-            type="PCA", method=conos::leiden.community, n.iterations=10, name="leiden", graph=NULL,
-            clf.data= NULL, clusters = NULL, uncertainty.thresholds=c(coverage=0.5, negative=0.5, positive=0.75),
-            sp.thresholds=list(accuracy=0.85, confusion.rate=3/17)){
+                                reann.right.old, res.left, res.right,res.right.old, out.name, outfile.path, res.switch=0.1,
+                                type="PCA", method=conos::leiden.community, n.iterations=10, name="leiden", graph=NULL,
+                                clf.data= NULL, clusters = NULL, uncertainty.thresholds=c(coverage=0.5, negative=0.5, positive=0.75),
+                                sp.thresholds=list(accuracy=0.85, confusion.rate=3/17)){
   message("reAnnotation QC ...")
   pass.reAnnotation.QC <- reAnnotationQC(reann.right, p.right, sp.thresholds)
 
@@ -407,8 +409,8 @@ findNextSmallestRes <- function(sub.graph, p.left, p.right, p.right.old, reann.l
 
   reann.right.old <- reann.right
   big.clusters <- getBigClusters(sub.graph, p.left, p.right, p.right.old, res.left, res.right, res.right.old,
-            reann.right.old, out.name, outfile.path, graph, clf.data, clusters, uncertainty.thresholds,
-            type="PCA", method=conos::leiden.community, n.iterations=50, name="leiden")
+                                 reann.right.old, out.name, outfile.path, graph, clf.data, clusters, uncertainty.thresholds,
+                                 type="PCA", method=conos::leiden.community, n.iterations=50, name="leiden")
   p.left <- big.clusters$p.left
   p.right <- big.clusters$p.right
   p.right.old <- big.clusters$p.right.old
@@ -418,18 +420,18 @@ findNextSmallestRes <- function(sub.graph, p.left, p.right, p.right.old, reann.l
   reann.right.old <- big.clusters$reann.right.old
   if (length(p.right$clusters$PCA$leiden %>% table) == 1){#Singleton can't do reannotation. #Considered as pass
     reann.right <- list(ann.by.level=list(annotation=list(l1=p.right$clusters$PCA$leiden)),#Build reann manually.
-             clf.data=list(marker.list=list())) #Singleton's reann should pass all self projection QC.
+                        clf.data=list(marker.list=list())) #Singleton's reann should pass all self projection QC.
     return(list(p.left=p.right, p.right=p.right.old, reann.left=reann.right, reann.right=reann.right.old,
                 res.left=res.right, res.right=res.right.old))
   }
 
   reann.right <- reAnnoPip(p.right, list(l=p.right$clusters$PCA$leiden),
-                     out.name, outfile.path, graph, clf.data, clusters, uncertainty.thresholds)
+                           out.name, outfile.path, graph, clf.data, clusters, uncertainty.thresholds)
   message("Now the new res.right and res.left become ", res.right, " ", res.left)
 
   return(findNextSmallestRes(sub.graph, p.left, p.right, p.right.old, reann.left, reann.right, reann.right.old,
-         res.left, res.right, res.right.old, out.name, outfile.path, res.switch, type="PCA", method,
-         n.iterations, name, graph, clf.data, clusters, uncertainty.thresholds, sp.thresholds))
+                             res.left, res.right, res.right.old, out.name, outfile.path, res.switch, type="PCA", method,
+                             n.iterations, name, graph, clf.data, clusters, uncertainty.thresholds, sp.thresholds))
 }
 
 
@@ -439,11 +441,11 @@ findNextSmallestRes <- function(sub.graph, p.left, p.right, p.right.old, reann.l
 #Look to the right for the maximum separable resolution (i.e. the 1st one that doesn't pass)
 #i.e. find the first resolution, at which the clustering results does not pass self projection QC.
 findNextBiggestRes <- function(sub.graph, p.left, p.left.old=p.left, p.right, reann.left,
-                           reann.left.old=reann.left, reann.right, res.left, res.left.old=res.left, res.right,
-                           out.name, outfile.path, res.switch=0.1, type="PCA", method=conos::leiden.community,
-                           n.iterations=50, name="leiden", graph=NULL, clf.data= NULL, clusters = NULL,
-                           uncertainty.thresholds=c(coverage=0.5, negative=0.5, positive=0.75),
-                           sp.thresholds=list(accuracy=0.85, confusion.rate=3/17)){
+                               reann.left.old=reann.left, reann.right, res.left, res.left.old=res.left, res.right,
+                               out.name, outfile.path, res.switch=0.1, type="PCA", method=conos::leiden.community,
+                               n.iterations=50, name="leiden", graph=NULL, clf.data= NULL, clusters = NULL,
+                               uncertainty.thresholds=c(coverage=0.5, negative=0.5, positive=0.75),
+                               sp.thresholds=list(accuracy=0.85, confusion.rate=3/17)){
 
   pass.reAnnotation.QC <- reAnnotationQC(reann.left, p.left, sp.thresholds)
 
@@ -464,10 +466,10 @@ findNextBiggestRes <- function(sub.graph, p.left, p.left.old=p.left, p.right, re
 
     if (length(p.left$clusters$PCA$leiden %>% table)==1){#Singleton can't be brought in, but may be produced inside.
       reann.left <- list(ann.by.level=list(annotation=list(l1=p.left$clusters$PCA$leiden)), #Counted as pass
-                    clf.data=list(marker.list=list()))#reAnnPip will output NULL on singletons, create it manually.
+                         clf.data=list(marker.list=list()))#reAnnPip will output NULL on singletons, create it manually.
     }else {
-        reann.left <- reAnnoPip(p.left, list(l=p.left$clusters$PCA$leiden),
-                       out.name, outfile.path, graph, clf.data, clusters, uncertainty.thresholds)
+      reann.left <- reAnnoPip(p.left, list(l=p.left$clusters$PCA$leiden),
+                              out.name, outfile.path, graph, clf.data, clusters, uncertainty.thresholds)
     }
     message("Now the new res.left and res.right become ", res.left, " ", res.right)
 
@@ -497,8 +499,8 @@ getNextLayersKnnClusters <- function(p2, annotation, out.name, outfile.path, lay
     if (length(annotation) > 0){
       message("Now we are going to get layer ", l, "...")
       next.layer <- getNextLayerKnnClusters(p2, annotation, out.name, outfile.path, min.res.start, graph,
-                    res.max.update, clf.data, uncertainty.thresholds, max.res.middle, res.switch, type="PCA",
-                    method, n.iterations, name, sp.thresholds, clustering.type, embeding.type)
+                                            res.max.update, clf.data, uncertainty.thresholds, max.res.middle, res.switch, type="PCA",
+                                            method, n.iterations, name, sp.thresholds, clustering.type, embeding.type)
 
       if (length(next.layer$ann.by.parents)==0) {annotation=c()} else{
         annotation <- next.layer$ann.by.parents %>% Reduce(c,.)
@@ -532,7 +534,7 @@ gatherAnnByLevelMarkerList <- function(reann.layer1, ann.layer1, ann.next.layers
   for (i in 1:(length(ann.by.level)-1)){
     if (length(ann.by.level[[i+1]]) != length(ann.by.level[[i]])){
       ann.by.level[[i+1]] <- c(ann.by.level[[i+1]],
-            ann.by.level[[i]][names(ann.by.level[[i]]) %>% setdiff(names(ann.by.level[[i+1]]))])
+                               ann.by.level[[i]][names(ann.by.level[[i]]) %>% setdiff(names(ann.by.level[[i+1]]))])
     }
     ann.by.level[[i+1]] %<>% .[ann.by.level[[i]] %>% names]
   }
@@ -585,11 +587,11 @@ getLeidenHierarchy <- function(p2, out.name, outfile.path, layer.n=10, layer.no.
   pass.reAnnotation.QC <- reAnnotationQC(reann.layer1, p2, sp.thresholds)
   if (pass.reAnnotation.QC){
     annotation.layer1 <- p2$clusters$PCA$leiden %>% sapply(function(n) paste0("l_",n)) %>%
-                         setNames(reann.layer1$ann.by.level$annotation$l1 %>% names())
+      setNames(reann.layer1$ann.by.level$annotation$l1 %>% names())
     next.layers <- getNextLayersKnnClusters(p2, annotation=annotation.layer1, out.name, outfile.path,
-                 layer.n, layer.no.factor, min.res.start=min.res, graph, res.max.update, clf.data,
-                 uncertainty.thresholds, max.res.middle=max.res.layer2, max.res.increase, res.switch,
-                 type, method, n.iterations, name, sp.thresholds, clustering.type, embeding.type)
+                                            layer.n, layer.no.factor, min.res.start=min.res, graph, res.max.update, clf.data,
+                                            uncertainty.thresholds, max.res.middle=max.res.layer2, max.res.increase, res.switch,
+                                            type, method, n.iterations, name, sp.thresholds, clustering.type, embeding.type)
   } else {
     stop("There is no subclusters in the cell population,
          or adjust sp.thresholds (confusion.rate = 1/accuracy -1), or try more gene features...")}
@@ -606,7 +608,7 @@ getLeidenHierarchy <- function(p2, out.name, outfile.path, layer.n=10, layer.no.
 annToTreeDf <- function(ann.by.level) {
   if (ann.by.level[[1]]%>%unique%>%length>1){
     ann.by.level <- c(list(root=rep("root", length(ann.by.level[[1]])) %>%
-                           setNames(names(ann.by.level[[1]]))), ann.by.level)
+                             setNames(names(ann.by.level[[1]]))), ann.by.level)
   }
 
   depth <- length(ann.by.level)
