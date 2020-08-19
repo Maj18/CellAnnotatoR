@@ -576,7 +576,7 @@ findNextBiggestRes <- function(sub.graph, p.left, p.left.old=p.left, p.right, re
 
 
 #Main function 6
-getNextLayersKnnClusters <- function(p2, annotation, out.name, outfile.path, layer.n, layer.no.factor=c(0, 3/7),
+getNextLayersKnnClusters <- function(p2, annotation, out.name, outfile.path, layer.n, layer.no.factor=c(0, 2/3),
                                      min.res.start=0, graph=NULL, res.max.update=1, clf.data=NULL,
                                      uncertainty.thresholds=c(coverage=0.5, negative=0.5, positive=0.75),
                                      max.res.middle=1, max.res.increase=1, res.switch=0.05, type="PCA",
@@ -900,4 +900,104 @@ getUncTree <- function(ann.by.level, marker.list){
   #clf.data <- readRDS("/Users/yuanli/Documents/Degree_project/Hierarchical_annotation/bin/CellAnnotatoR-clean/notebooks/28files/clf.data.rds")
   #unc.trait <- readRDS("/Users/yuanli/Documents/Degree_project/Hierarchical_annotation/bin/CellAnnotatoR-clean/notebooks/28files/unc.trait.rds")
   plotUncHierarchy(clf.data, unc.trait)
+}
+
+
+
+compareAdjustedRandIndex <- function(ann.marker.level.constant.acc, ann.by.level.manual){
+  adj.rand.index <- lapply(ann.marker.level.constant.acc, function(acc) {
+    abl <- acc$ann.by.level
+    iter <- min(length(abl), length(ann.by.level.manual))
+    adj.rand.index <- sapply(1:iter, function(l){
+      adjustedRandIndex(abl[[l]], ann.by.level.manual[[l]])})
+    if (length(ann.by.level.manual) > length(abl)){
+      adj.rand.index2 <- sapply((iter+1):length(ann.by.level.manual), function(ll){
+          adjustedRandIndex(abl[[iter]], ann.by.level.manual[[ll]])})
+      adj.rand.index <- c(adj.rand.index, adj.rand.index2)
+    } else if (length(ann.by.level.manual) < length(abl)) {
+      adj.rand.index2 <- sapply((iter+1):length(abl), function(lll){
+          adjustedRandIndex(abl[[lll]], ann.by.level.manual[[iter]])})
+      adj.rand.index <- c(adj.rand.index, adj.rand.index2)
+    }
+    adj.rand.index
+  })
+  return(adj.rand.index)
+}
+
+
+
+#How many layers and how clusters per layer, per tree
+getTreeFeature <- function(tree){
+  layer.no <- length(tree)
+  cluster.no.per.layer <- sapply(tree, function(l) unique(l)%>%length)
+  return(list(layer.no=layer.no, cluster.no.per.layer=cluster.no.per.layer))
+}
+
+
+#How many layers and how clusters per layer
+getTreeFeatures <- function(ann.marker.level.constant.acc){
+  layer.no <- c()
+  cluster.no.per.layer  <- c()
+  tf <- lapply(ann.marker.level.constant.acc, function(acc){
+    abl <- acc$ann.by.level
+    tf <- getTreeFeature(abl)
+  })
+  layer.no <- sapply(tf, function(acc) acc$layer.no)
+  cluster.no.per.layer <- sapply(tf, function(acc) acc$cluster.no.per.layer)
+  return(list(layer.no=layer.no, cluster.no.per.layer=cluster.no.per.layer))
+}
+
+#For Hierarchy result presentation
+getClusterNo <- function(df) {
+  lapply(df, function(cr) {
+    sapply(cr$ann.by.level, function(l){
+      split(l,l) %>% length
+    })
+  })
+}
+
+#getClusterNo(ann.marker.level.constant.acc4)
+
+#gather the confusion rate, cluster number per layer and the layer names information
+gatherConfRClustNo <- function(df, conf.rates){
+  confusion.rate <- c()
+  cluster.no <- c()
+  layers <- c()
+  clust.no.list <- getClusterNo(df)
+  for (r in 1:length(clust.no.list)) {
+    confusion.rate <- c(confusion.rate, rep(conf.rates[r], length(clust.no.list[[r]])))
+    cluster.no <- c(cluster.no, clust.no.list[[r]])
+    layers <- c(layers, clust.no.list[[r]]%>%names)
+  }
+  return(list(confusion.rate=confusion.rate, cluster.no=cluster.no, layers=layers))
+}
+
+#Correlation measurement: proportionality
+getProportionalitySingleLayer <- function(layer1, layer2, prop.matrix){
+  propr.single.layer <-lapply(layer1, function(cluster.1) {
+    sapply(layer2, function(cluster.2){
+      prop.matrix[cluster.1, cluster.2]%>%mean
+    })
+  })
+  return(propr.single.layer)
+}
+
+
+getProportionality <- function(ann.by.level1, ann.by.level2,
+                               raw.counts, metric = c("rho", "phi", "phs", "cor", "vlr"),
+                               ivar = "clr", symmetrize = FALSE,  p = 100){
+  prop <- propr(raw.counts%>%t(), metric = metric, ivar = "clr", symmetrize = FALSE, p = 100)
+  depth.min <- min(length(ann.by.level1), length(ann.by.level2))
+  ann.by.level1.cluster <- lapply(ann.by.level1, function(l) split(l,l) %>% lapply(names))
+  ann.by.level2.cluster <- lapply(ann.by.level2, function(l) split(l,l) %>% lapply(names))
+
+  props <- mapply(function(layer1, layer2) {
+    lapply(layer1, function(cluster.1) {
+      sapply(layer2, function(cluster.2){
+        prop@matrix[cluster.1, cluster.2] %>% mean
+      })
+    })
+  }, ann.by.level1.cluster[1:depth.min], ann.by.level2.cluster[1:depth.min])
+
+  return(props %>% lapply(function(l) data.frame(l)))
 }
