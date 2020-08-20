@@ -1,0 +1,129 @@
+---
+title: "Leiden hierarchy"
+author: "Yuan Li"
+date: "`r Sys.Date()`"
+output: html_notebook
+---
+
+#This is run within the Pagoda2 Docker container (https://github.com/kharchenkolab/pagoda2#installing-pagoda2-as-docker-container)
+```{r, warning=FALSE, message=FALSE}
+devtools::install_github("khodosevichlab/CellAnnotatoR")
+install.packages("pheatmap")
+install.packages("plyr")
+install.packages("propr", lib="/Library/Frameworks/R.framework/Versions/3.6/Resources/library")
+#For summarySE
+install.packages("Rmisc", lib="/Library/Frameworks/R.framework/Versions/3.6/Resources/library")
+devtools::install_github('YuLab-SMU/ggtree')
+#For adjustedRandIndex
+install.packages("mclust", lib="/Library/Frameworks/R.framework/Versions/3.6/Resources/library")
+devtools::install_github("vpetukhov/vpscutils")
+```
+
+```{r}
+library(pagoda2)
+library(sccore)
+library(ggplot2)
+library(Matrix)
+library(pbapply)
+library(dplyr)
+library(readr)
+library(CellAnnotatoR)
+library(pheatmap)
+library(plyr)
+library(propr)
+library(ggtree)
+library(Rmisc) #For summarySE
+library(mclust) #For adjustedRandIndex
+
+theme_set(theme_bw())
+```
+
+# Predict the leiden hierarchy
+```{r}
+p2 <- read_rds("~/data/separability/mouse_visp_marker_selection/p2.rds") #pagada dataset #Adjust it to your own folder
+out.name <- "leiden_hierarchy" #Adjust it to your own choice
+outfile.path <- "~/CellAnnotatoR-clean/notebooks/29files/" #Adjust it to your own folder
+
+# There are three important arguments here for deciding the depth, layer number and cluster number per layer of the predicted hierarchy
+
+# The first one is confusion.rate.maximum, this is the maximum confusion rate threshold. If layer.no.factor != 0  this will most likely have an influence on the depth (the higher, the deeper) and cluster number per layer (the higher, the more, at lower levels) of the hierarchy. The maximum value of confusion.rate.maximum can take is 2/3, which corresponds to a self projection accuracy of 0.6.
+
+# The second one is confusion.rate.threshold, this will definitely decide the cluster number for layer 2, and maybe on layer1 as well (if this threshold is too small/stringent, prediction for layer 1 may report an error and tells you that there is not enough structure in the data). This argument will also decide the cluster number of the lower layers if layer.no.factor==0.
+
+# The last one is layer.no.factor, it decides the step size of the increase of the confusion.rate.threshold layer by layer (from layer 2) towards confusion.rate.maximum, and confusion.rate.threshold then sticks to this maximum value until the bottom hierachical layer.
+
+# Keep in mind that the self projection confusion rate corresponds to (1-accuracy)/accuracy
+
+ann.marker.level <- getLeidenHierarchy(p2, out.name, outfile.path, layer.n=10, layer.no.factor=20/63,
+                                        res.step.layer1=0.01, min.res=0, max.res.layer2=1, max.res.increase=1,
+                                        res.switch=0.05, clustering.type=NULL, embeding.type=NULL,
+                                        res.max.update=1, clf.data=NULL, clusters = NULL,
+                                        uncertainty.thresholds=c(coverage=0.5, negative=0.5, positive=0.75),
+                                        confusion.rate.threshold=1/9, confusion.rate.maximum=3/7, 
+                                        graph=NULL, type="PCA", method=conos::leiden.community, n.iterations=50,
+                                        name="leiden", data.splitting="graph", reannotation=FALSE, certainty.threshold=0.5)
+
+ann.by.level <- ann.marker.level$ann.by.level #Annotation by level
+```
+
+# Result presentation
+## Plot the predicted leiden hierarchy
+```{r, fig.width=2, fig.height=8}
+c.df <- annToTreeDf(ann.by.level)
+plotTypeHierarchyLi(c.df)
+```
+
+## Plot the cell annotation for each hiearchial layer of the predicted leiden hierachy
+```{r}
+plotAnnotationByLevels(p2$embeddings$PCA$UMAP, ann.by.level, size=0.2, font.size=c(2, 4), shuffle.colors=T)
+```
+
+# Result evaluation
+## Comparing to a manually built cell type hierarchy
+### Adjusted Rand Index
+```{r}
+ann.by.level.manual <- 
+  read_rds("~/data/separability/mouse_visp_marker_selection/annotation_by_level.rds") #Adjust to your own folder
+ard <- compareAdjustedRandIndex(list(ann.marker.level), ann.by.level.manual)
+ard
+```
+
+### Proportionality heatmap
+```{r}
+raw.counts <- p2$misc$rawCounts %>% as.matrix() #Here, in rawCounts, row: cells, column: feature genes
+props <- getProportionality(ann.by.level, ann.by.level.manual, raw.counts, metric="rho")
+for (i in 1:length(props)){
+  heatmap(props[[i]]%>%as.matrix(), Rowv=NA, Colv=NA)
+}
+```
+
+## Cell assignment uncertainty
+```{r}
+# Prepare for calculating uncertainty
+clf.data <- getClfDataInferringMarkers(p2, ann.by.level, name="predicted", outfile.path="~/CellAnnotatoR-clean/notebooks/30files/", stringent=F)
+score.info<- getMarkerScoreInfo(clf.data)
+score.info.per.cluster <- getMarkerScoresPerCellType(clf.data, score.info)
+score.info.by.layer <-
+  ann.by.level1 %>% lapply(unique) %>% lapply(function(n){
+    n <- intersect(n, score.info.per.cluster%>%colnames) 
+    score.info.per.cluster[, n]})
+
+# Calculate uncertainty
+unc.info <-
+  names(ann.by.level1)[1:length(ann.by.level1)] %>% setNames(., .) %>%
+    plapply(function(n) scorePerCellUncertainty(ann.by.level1[[n]],
+                                  score.info.by.layer[[n]], score.info))
+
+# Prepare the uncertainty data (as "trait")
+unc.trait <- uncToTreeTrait(unc.info, ann.by.level1)
+
+# Plot uncertainty traits on Leiden hiearchy
+plotUncHierarchy(clf.data, unc.trait)
+```
+
+
+```{r}
+require(pagoda2); sessioninfo::session_info()
+```
+
+
