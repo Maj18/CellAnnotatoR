@@ -9,20 +9,26 @@ Encoding: UTF-8
 LazyData: true
 Imports:
     conos (>= 1.2.0),
+    cowplot,
     dplyr,
     ggplot2,
-    igraph,
-    Matrix,
-    tibble,
-    magrittr,
-    cowplot,
+    igraph, 
+    magrittr,  
+    Matrix,	
+    pbapply,
+    propr,  
     Rcpp,
-    sccore (>= 0.1)
+    readr,
+    Rmisc,
+    sccore (>= 0.1),
+    tibble,
 Suggests:
+    ggpubr,
     ggtree (>= 1.99.1),
     knitr,
-    rmarkdown,
-    ggpubr,
+    mclust,
+    pheatmap,
+    rmarkdown,   
     testthat
 Remotes:
     hms-dbmi/conos,
