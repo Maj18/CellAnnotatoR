@@ -40,7 +40,7 @@ theme_set(theme_bw())
 
 # Predict the leiden hierarchy
 ```{r}
-p2 <- read_rds("~/data/separability/mouse_visp_marker_selection/p2.rds") #pagada dataset #Adjust it to your own folder
+p2 <- read_rds("~/data/separability/mouse_visp_marker_selection/p2.rds") #pagada dataset #Adjust it to your own file path
 out.name <- "leiden_hierarchy" #Adjust it to your own choice
 outfile.path <- "~/CellAnnotatoR-clean/notebooks/29files/" #Adjust it to your own folder
 
@@ -67,7 +67,7 @@ ann.by.level <- ann.marker.level$ann.by.level #Annotation by level
 ```
 
 # Result presentation
-## Plot the predicted leiden hierarchy
+## Get the predicted leiden hierarchy
 ```{r, fig.width=2, fig.height=8}
 c.df <- annToTreeDf(ann.by.level)
 plotTypeHierarchyLi(c.df)
@@ -83,7 +83,7 @@ plotAnnotationByLevels(p2$embeddings$PCA$UMAP, ann.by.level, size=0.2, font.size
 ### Adjusted Rand Index
 ```{r}
 ann.by.level.manual <- 
-  read_rds("~/data/separability/mouse_visp_marker_selection/annotation_by_level.rds") #Adjust to your own folder
+  read_rds("~/data/separability/mouse_visp_marker_selection/annotation_by_level.rds") #Adjust to your own file path.
 ard <- compareAdjustedRandIndex(list(ann.marker.level), ann.by.level.manual)
 ard
 ```
