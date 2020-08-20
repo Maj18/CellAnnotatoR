@@ -581,7 +581,7 @@ getNextLayersKnnClusters <- function(p2, annotation, out.name, outfile.path, lay
                                      uncertainty.thresholds=c(coverage=0.5, negative=0.5, positive=0.75),
                                      max.res.middle=1, max.res.increase=1, res.switch=0.05, type="PCA",
                                      method=conos::leiden.community, n.iterations=50, name="leiden",
-                                     confusion.rate.threshold=1/9, confusion.rate.bottom.line=3/7,
+                                     confusion.rate.threshold=1/9, confusion.rate.maximum=3/7,
                                      clustering.type=NULL, embeding.type=NULL, data.splitting="dataset",
                                      reannotation=FALSE, certainty.threshold=0.5){
   next.layers <- list()
@@ -601,7 +601,7 @@ getNextLayersKnnClusters <- function(p2, annotation, out.name, outfile.path, lay
       }
 
       confusion.rate.threshold <-
-        pmin((confusion.rate.threshold+layer.no.factor), confusion.rate.bottom.line)
+        pmin((confusion.rate.threshold+layer.no.factor), confusion.rate.maximum)
       max.res.middle <- max.res.middle + max.res.increase
 
       next.layers <- c(next.layers, list(next.layer) %>% setNames(paste0("l", l)))
@@ -669,7 +669,7 @@ getLeidenHierarchy <- function(p2, out.name, outfile.path, layer.n=10, layer.no.
                                res.switch=0.05, clustering.type=NULL,embeding.type=NULL,
                                res.max.update=1, clf.data=NULL, clusters = NULL,
                                uncertainty.thresholds=c(coverage=0.5, negative=0.5, positive=0.75),
-                               confusion.rate.threshold=1/9, confusion.rate.bottom.line=3/7, graph=NULL,
+                               confusion.rate.threshold=1/9, confusion.rate.maximum=3/7, graph=NULL,
                                type="PCA", method=conos::leiden.community, n.iterations=50,
                                name="leiden", data.splitting="dataset", reannotation=FALSE
                                , certainty.threshold=0.5){
@@ -697,7 +697,7 @@ getLeidenHierarchy <- function(p2, out.name, outfile.path, layer.n=10, layer.no.
     next.layers <- getNextLayersKnnClusters(p2, annotation=annotation.layer1, out.name, outfile.path,
                    layer.n, layer.no.factor, min.res.start=min.res, graph, res.max.update, clf.data,
                    uncertainty.thresholds, max.res.middle=max.res.layer2, max.res.increase, res.switch,
-                   type, method, n.iterations, name, confusion.rate.threshold, confusion.rate.bottom.line,
+                   type, method, n.iterations, name, confusion.rate.threshold, confusion.rate.maximum,
                    clustering.type, embeding.type, data.splitting, reannotation, certainty.threshold)
   } else {
     stop("There is no subclusters in the cell population,
