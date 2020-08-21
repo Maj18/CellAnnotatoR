@@ -1,16 +1,20 @@
 
-# TODO: sort the functions
-
-# Self Projection Quality Control
-# This is used for the self projection quaility control after re-annotating the leiden-clustering-based hierarchy
+#' Self Projection Quality Control
+#'
+#' @description Used for the self projection quaility control after re-annotating
+#'  the leiden-clustering-based hierarchy.
+#'  Confusion rate: incorrectly predicted cell number that is normalized as being
+#'  divided by the corrected predicted cells.
+#'  The cluster sample size is balanced by adjusting weights inversely
+#'  proportional to class frequencies in the input data
+#' @param annotation.before,annotation.after The original and predicted
+#' (based on selected markers) cell annotation, they need to have the same length.
+#' @return A list including one vector with self projection accuracy for each parent,
+#' and one matrix with columns being clusters, while rows being "conf", "fpr".
 selfProjQCperCluster <- function(annotation.before, annotation.after) {
   #Get self projection accuracy:
   acc <- sum(annotation.before == annotation.after)/length(annotation.before)
-  #The annotation before and after need to have the same length.
-  #Get confusion rate (FP/TP):
-  #the cluster sample size is balanced by adjusting weights inversely proportional to class frequencies in the input data
   clusters <- unique(annotation.before)
-
   conf.fpr <- sapply(clusters, function(x) {
     wei.x <- length(annotation.before)/table(annotation.before)[x]
     wei.other <- 1/(1-(1/wei.x))
@@ -35,9 +39,17 @@ selfProjQCperCluster <- function(annotation.before, annotation.after) {
 
 
 
-
-
-
+#' Get classification data and marker list
+#'
+#' @description The markers are selected from differentially expressed genes and
+#' the markers are selected under parents, which means the selected markers are supposed
+#' to distinguish one cluster from all the rest that belong to the same parent cluster.
+#' @param p2
+#' @param ann.by.level
+#' @param name
+#' @param outfile.path
+#' @param stringent
+#' @return
 getClfDataInferringMarkers <- function(p2, ann.by.level, name, outfile.path, stringent=T){
   #Check singleton
   if (length(ann.by.level)==1 && (ann.by.level[[1]] %>% unique %>% length)==1 && stringent)
@@ -74,10 +86,6 @@ getClfDataInferringMarkers <- function(p2, ann.by.level, name, outfile.path, str
 
   return(clf.data)
 }
-
-
-
-
 
 
 selectMarkersByParent <- function(p2, ann.by.parent, z.threshold=0, append.auc=T, max.iters=50,
@@ -749,11 +757,17 @@ annToTreeDf <- function(ann.by.level) {
 
 
 
-
-#' Add color argument
+#' Plot cell type hierarchy
+#'
+#' @description modified from Viktor's function
 #' @param classificaiton should be either classificaiton.tree or a classification dataframe
+#' @inheritParams ggtree::ggtree
+#' @inheritParams ggtree::geom_rootpoint
+#' @inheritParams ggtree::geom_label2
+#' @inheritParams ggplot2::xlim
+#' @inheritParams ggplot2::aes
+#' @inheritParams ape::as.phylo
 #' @export
-#' modified from Viktor's function
 plotTypeHierarchyLi <- function(classification, layout="slanted",
                                 xlims=NULL, font.size=3, col="black", ...) {
   if (!requireNamespace("ggtree", quietly=T))
@@ -780,10 +794,13 @@ plotTypeHierarchyLi <- function(classification, layout="slanted",
 
 
 
-#' Prepare the "trait" file for plotUncHierarchy() from the positive, negative and coverage uncertainty data (output from scoreCellUncertaintyPerLevel())
+#' Uncertainty to tree traits
+#'
+#' @description Prepare the "trait" file for plotUncHierarchy() from the positive, negative and coverage uncertainty data (output from scoreCellUncertaintyPerLevel())
 #' @param unc.per.cell a list, each element represents the annotation of all cells at on hierarchical level
 #' @param ann.by.level a list of lists, each main element is one hierarchical level; at each hierarchical level, there is a sublist, which contains 3 elements: positive, negative and coverage uncertainty.
-#' @export ann.unc a dataframe, there are 4 columns:"type" #cell types   "positive" "negative" "coverage" #uncertainty
+#' @return ann.unc a dataframe, there are 4 columns:"type" #cell types   "positive" "negative" "coverage" #uncertainty
+#' @export
 uncToTreeTrait <- function(unc.per.cell, ann.by.level) {
   ann.unc <- list()
   for (i in names(unc.per.cell) %>% setNames(.,.)) {
@@ -808,11 +825,20 @@ uncToTreeTrait <- function(unc.per.cell, ann.by.level) {
 
 
 
-#Plot uncertainty on trees
-#' Plot uncertainty (positive, negative, coverage) on hierarchical trees
+#' Plot uncertainty on trees
+#'
+#' @description  Plot uncertainty (positive, negative, coverage) on hierarchical trees
 #' @param c.data output file from re-annotation (by assignCellsByScores())
 #' @param trait.file contain the mean positive, negative, coverage uncertainties for each cell type (including root, node and tips)
 #' @param unc one of c("positive", "negative", "coverage")
+#' @inheritParams dplyr::full_join
+#' @inheritParams ggtree::geom_label2
+#' @inheritParams ggplot2::xlim
+#' @inheritParams cowplot::plot_grid
+#' @inheritParams ggtree::nodeid
+#' @inheritParams ape::as.phylo
+#' @inheritParams dplyr::full_join
+#' @inheritParams ggtree::ggtree
 #' @export
 plotUncHierarchy <- function(c.data, trait.file, layout="slanted",
                             xlims=NULL, font.size=3, col.range=c(0,1), ...) {
@@ -909,14 +935,14 @@ compareAdjustedRandIndex <- function(ann.marker.level.constant.acc, ann.by.level
     abl <- acc$ann.by.level
     iter <- min(length(abl), length(ann.by.level.manual))
     adj.rand.index <- sapply(1:iter, function(l){
-      adjustedRandIndex(abl[[l]], ann.by.level.manual[[l]])})
+      mclust::adjustedRandIndex(abl[[l]], ann.by.level.manual[[l]])})
     if (length(ann.by.level.manual) > length(abl)){
       adj.rand.index2 <- sapply((iter+1):length(ann.by.level.manual), function(ll){
-          adjustedRandIndex(abl[[iter]], ann.by.level.manual[[ll]])})
+        mclust::adjustedRandIndex(abl[[iter]], ann.by.level.manual[[ll]])})
       adj.rand.index <- c(adj.rand.index, adj.rand.index2)
     } else if (length(ann.by.level.manual) < length(abl)) {
       adj.rand.index2 <- sapply((iter+1):length(abl), function(lll){
-          adjustedRandIndex(abl[[lll]], ann.by.level.manual[[iter]])})
+        mclust::adjustedRandIndex(abl[[lll]], ann.by.level.manual[[iter]])})
       adj.rand.index <- c(adj.rand.index, adj.rand.index2)
     }
     adj.rand.index
@@ -972,6 +998,8 @@ gatherConfRClustNo <- function(df, conf.rates){
   return(list(confusion.rate=confusion.rate, cluster.no=cluster.no, layers=layers))
 }
 
+
+
 #Correlation measurement: proportionality
 getProportionalitySingleLayer <- function(layer1, layer2, prop.matrix){
   propr.single.layer <-lapply(layer1, function(cluster.1) {
@@ -983,10 +1011,11 @@ getProportionalitySingleLayer <- function(layer1, layer2, prop.matrix){
 }
 
 
+
 getProportionality <- function(ann.by.level1, ann.by.level2,
                                raw.counts, metric = c("rho", "phi", "phs", "cor", "vlr"),
                                ivar = "clr", symmetrize = FALSE,  p = 100){
-  prop <- propr(raw.counts%>%t(), metric = metric, ivar = "clr", symmetrize = FALSE, p = 100)
+  prop <- propr::propr(raw.counts%>%t(), metric = metric, ivar = "clr", symmetrize = FALSE, p = 100)
   depth.min <- min(length(ann.by.level1), length(ann.by.level2))
   ann.by.level1.cluster <- lapply(ann.by.level1, function(l) split(l,l) %>% lapply(names))
   ann.by.level2.cluster <- lapply(ann.by.level2, function(l) split(l,l) %>% lapply(names))
