@@ -1,5 +1,5 @@
 ---
-title: "Leiden hierarchy"
+title: "Leiden hierarchy (v0.2.2.1)"
 author: "Yuan Li"
 date: "`r Sys.Date()`"
 output: html_notebook
@@ -9,11 +9,8 @@ output: html_notebook
 ```{r, warning=FALSE, message=FALSE}
 devtools::install_github("khodosevichlab/CellAnnotatoR")
 install.packages("pheatmap")
-install.packages("plyr")
+#For proportionality
 install.packages("propr", lib="/Library/Frameworks/R.framework/Versions/3.6/Resources/library")
-#For summarySE
-install.packages("Rmisc", lib="/Library/Frameworks/R.framework/Versions/3.6/Resources/library")
-devtools::install_github('YuLab-SMU/ggtree')
 #For adjustedRandIndex
 install.packages("mclust", lib="/Library/Frameworks/R.framework/Versions/3.6/Resources/library")
 devtools::install_github("vpetukhov/vpscutils")
@@ -28,12 +25,7 @@ library(pbapply)
 library(dplyr)
 library(readr)
 library(CellAnnotatoR)
-library(pheatmap)
-library(plyr)
-library(propr)
 library(ggtree)
-library(Rmisc) #For summarySE
-library(mclust) #For adjustedRandIndex
 
 theme_set(theme_bw())
 ```
@@ -123,7 +115,7 @@ plotUncHierarchy(clf.data, unc.trait)
 
 
 ```{r}
-require(pagoda2); sessioninfo::session_info()
+sessioninfo::session_info()
 ```
 
 
