@@ -181,10 +181,6 @@ reAnnotationQC <- function(reann, p, confusion.rate.threshold, certainty.thresho
 
 
 
-
-
-
-
 getBigClusters <- function(sub.graph=NULL, p.left, p.right, p.right.old, res.left, res.right,
             res.right.old, reann.right.old, out.name, outfile.path, graph=NULL, clf.data=NULL,
             clusters=NULL, uncertainty.thresholds=c(coverage=0.5, negative=0.5, positive=0.75),
@@ -597,6 +593,7 @@ getNextLayersKnnClusters <- function(p2, annotation, out.name, outfile.path,
                                      reannotation=FALSE, certainty.threshold=0.5){
   next.layers <- list()
   crt <- confusion.rate.thresh[1]
+  l=2
   while (length(annotation) > 0){
     message("Now we are going to get layer ", l, "...")
     next.layer <- getNextLayerKnnClusters(p2, annotation, out.name, outfile.path, min.res.start, graph,
@@ -617,6 +614,7 @@ getNextLayersKnnClusters <- function(p2, annotation, out.name, outfile.path,
     max.res.middle <- max.res.middle + max.res.increase
 
     next.layers <- c(next.layers, list(next.layer) %>% setNames(paste0("l", l)))
+    l <- l+1
   }
 
   return(next.layers)
@@ -685,8 +683,8 @@ getLeidenHierarchy <- function(p2, out.name, outfile.path,
                                graph=NULL, type="PCA", method=conos::leiden.community, n.iterations=50,
                                name="leiden", data.splitting="dataset", reannotation=FALSE,
                                certainty.threshold=0.5){
-  if (res.max.increase <= res.switch){
-    stop("res.max.increase must be larger than res.switch")}
+  if (max.res.increase <= res.switch){
+    stop("max.res.increase must be larger than res.switch")}
   message("Get Knn clusters for layer 1 ...")
   #Get a big picutre in layer1, we will accept the first non-singletong KNN clustering result here.
   layer1 <- getLayer1KnnClusters(sub.graph=NULL, p2, res.start=0.01, res.step=res.step.layer1)
@@ -696,7 +694,7 @@ getLeidenHierarchy <- function(p2, out.name, outfile.path,
 
   message("Get Knn clusters for the rest layers ...")
   pass.reAnnotation.QC <-
-    reAnnotationQC(reann.layer1, p2, confusion.rate.threshold, certainty.threshold)
+    reAnnotationQC(reann.layer1, p2, confusion.rate.thresh[1], certainty.threshold)
   if (pass.reAnnotation.QC){
     if (reannotation){
       annotation.layer1 <- reann.layer1$ann.by.level$annotation$l1 %>% sapply(function(n) paste0("l_",n)) %>%
