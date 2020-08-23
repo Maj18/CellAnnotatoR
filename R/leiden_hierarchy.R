@@ -584,21 +584,25 @@ findNextBiggestRes <- function(sub.graph, p.left, p.left.old=p.left, p.right, re
 }
 
 
+
+
 #Main function 6
-getNextLayersKnnClusters <- function(p2, annotation, out.name, outfile.path, layer.no.factor=c(0, 2/3),
-                                     min.res.start=0, graph=NULL, res.max.update=1, clf.data=NULL,
+getNextLayersKnnClusters <- function(p2, annotation, out.name, outfile.path,
+                                     confusion.rate.thresh=c(min=1/9, max=3/7, step.size=0.2),
+                                     min.res.start=0, graph=NULL, clf.data=NULL,
                                      uncertainty.thresholds=c(coverage=0.5, negative=0.5, positive=0.75),
                                      max.res.middle=1, max.res.increase=1, res.switch=0.05, type="PCA",
                                      method=conos::leiden.community, n.iterations=50, name="leiden",
-                                     confusion.rate.threshold, confusion.rate.maximum=3/7,
                                      clustering.type=NULL, embeding.type=NULL, data.splitting="dataset",
                                      reannotation=FALSE, certainty.threshold=0.5){
   next.layers <- list()
+  crt <- confusion.rate.thresh[1]
   while (length(annotation) > 0){
     message("Now we are going to get layer ", l, "...")
     next.layer <- getNextLayerKnnClusters(p2, annotation, out.name, outfile.path, min.res.start, graph,
-                                          res.max.update, clf.data, uncertainty.thresholds, max.res.middle, res.switch, type="PCA",
-                                          method, n.iterations, name, confusion.rate.threshold, clustering.type, embeding.type,
+                                          res.max.update=max.res.increase, clf.data, uncertainty.thresholds,
+                                          max.res.middle, res.switch, type="PCA", method, n.iterations, name,
+                                           confusion.rate.threshold=crt, clustering.type, embeding.type,
                                           data.splitting, reannotation, certainty.threshold)
 
     saveRDS(next.layer, file=paste0(outfile.path, "next.layer.rds"))
@@ -608,8 +612,8 @@ getNextLayersKnnClusters <- function(p2, annotation, out.name, outfile.path, lay
       annotation <- annotation[annotation %in% (table(annotation) %>% .[.>=12] %>% names)]
     }
 
-    confusion.rate.threshold <-
-      pmin((confusion.rate.threshold+layer.no.factor), confusion.rate.maximum)
+    crt <-
+      pmin((confusion.rate.thresh[1]+confusion.rate.thresh[3]), confusion.rate.thresh[2])
     max.res.middle <- max.res.middle + max.res.increase
 
     next.layers <- c(next.layers, list(next.layer) %>% setNames(paste0("l", l)))
@@ -672,17 +676,17 @@ gatherAnnByLevelMarkerList <- function(reann.layer1, ann.layer1, ann.next.layers
 #2. sp shouldn't have NaN or Inf
 #3. All the clusters should hava a minimum size of 6 after re-annotation
 #4. The self projection accuracy by re-annotation has to be >=0.6 (or 0.8) and the confusion rate has to be <=2/3 (0.25)
-getLeidenHierarchy <- function(p2, out.name, outfile.path, layer.no.factor=0.2,
+getLeidenHierarchy <- function(p2, out.name, outfile.path,
+                               confusion.rate.thresh=c(min=1/9, max=3/7, step.size=0.2),
                                res.step.layer1=0.01, min.res=0, max.res.layer2=1, max.res.increase=1,
                                res.switch=0.05, clustering.type=NULL,embeding.type=NULL,
-                               res.max.update=1, clf.data=NULL, clusters = NULL,
+                               clf.data=NULL, clusters = NULL,
                                uncertainty.thresholds=c(coverage=0.5, negative=0.5, positive=0.75),
-                               confusion.rate.threshold, confusion.rate.maximum=3/7, graph=NULL,
-                               type="PCA", method=conos::leiden.community, n.iterations=50,
-                               name="leiden", data.splitting="dataset", reannotation=FALSE
-                               , certainty.threshold=0.5){
-  if (res.max.update <= res.switch){
-    stop("res.max.update must be larger than res.switch")}
+                               graph=NULL, type="PCA", method=conos::leiden.community, n.iterations=50,
+                               name="leiden", data.splitting="dataset", reannotation=FALSE,
+                               certainty.threshold=0.5){
+  if (res.max.increase <= res.switch){
+    stop("res.max.increase must be larger than res.switch")}
   message("Get Knn clusters for layer 1 ...")
   #Get a big picutre in layer1, we will accept the first non-singletong KNN clustering result here.
   layer1 <- getLayer1KnnClusters(sub.graph=NULL, p2, res.start=0.01, res.step=res.step.layer1)
@@ -703,10 +707,10 @@ getLeidenHierarchy <- function(p2, out.name, outfile.path, layer.no.factor=0.2,
     }
 
     next.layers <- getNextLayersKnnClusters(p2, annotation=annotation.layer1, out.name, outfile.path,
-                   layer.no.factor, min.res.start=min.res, graph, res.max.update, clf.data,
-                   uncertainty.thresholds, max.res.middle=max.res.layer2, max.res.increase, res.switch,
-                   type, method, n.iterations, name, confusion.rate.threshold, confusion.rate.maximum,
-                   clustering.type, embeding.type, data.splitting, reannotation, certainty.threshold)
+                   confusion.rate.thresh, min.res.start=min.res,
+                   graph, clf.data, uncertainty.thresholds, max.res.middle=max.res.layer2,
+                   max.res.increase, res.switch,type, method, n.iterations, name, clustering.type,
+                   embeding.type, data.splitting, reannotation, certainty.threshold)
   } else {
     stop("There is no subclusters in the cell population,
          or adjust confusion.rate.threshold (confusion.rate = 1/accuracy -1), or try more gene features...")}
