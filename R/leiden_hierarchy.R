@@ -320,6 +320,7 @@ getNextLayerKnnClusters <- function(p2, annotation, out.name, outfile.path, min.
 
   ann.by.parents <- list()
   marker.list <- list()
+  res <- list()
   ann.by.cluster <- split(annotation, annotation)
   for (cl in names(ann.by.cluster)){
     message("Now we will get next layer for cluster ", cl)
@@ -360,6 +361,7 @@ getNextLayerKnnClusters <- function(p2, annotation, out.name, outfile.path, min.
                             certainty.threshold)
     reann.left <- best.res$reann.left
     p.left <- best.res$p.left
+    res.left <- best.res$res.left
     message("Now we got next layer for ", cl)
 
     if (reannotation){
@@ -383,11 +385,12 @@ getNextLayerKnnClusters <- function(p2, annotation, out.name, outfile.path, min.
             sub.clust$"parent"=cl
             sub.clust})
           marker.list <- c(marker.list, list(marker.list.cl) %>% setNames(cl))
-        }
+          res <- c(res, list(res.left)%>%setNames(cl))
+      }
     }
 
   }
-  return(list(ann.by.parents=ann.by.parents, marker.list=marker.list))
+  return(list(ann.by.parents=ann.by.parents, marker.list=marker.list, res=res))
 }
 
 
@@ -602,21 +605,19 @@ getNextLayersKnnClusters <- function(p2, annotation, out.name, outfile.path,
                                            confusion.rate.threshold=crt, clustering.type, embeding.type,
                                           data.splitting, reannotation, certainty.threshold)
 
-    saveRDS(next.layer, file=paste0(outfile.path, "next.layer.rds"))
-
     if (length(next.layer$ann.by.parents)==0) {annotation=c()} else{
       annotation <- next.layer$ann.by.parents %>% Reduce(c,.)
       annotation <- annotation[annotation %in% (table(annotation) %>% .[.>=12] %>% names)]
     }
 
-    crt <-
-      pmin((confusion.rate.thresh[1]+confusion.rate.thresh[3]), confusion.rate.thresh[2])
-    max.res.middle <- max.res.middle + max.res.increase
-
-    next.layers <- c(next.layers, list(next.layer) %>% setNames(paste0("l", l)))
-    l <- l+1
+    if (length(annotation) > 0) {
+      crt <-
+        pmin((confusion.rate.thresh[1]+confusion.rate.thresh[3]), confusion.rate.thresh[2])
+      max.res.middle <- max.res.middle + max.res.increase
+      next.layers <- c(next.layers, list(next.layer) %>% setNames(paste0("l", l)))
+      l <- l+1
+    }
   }
-
   return(next.layers)
 }
 
@@ -677,7 +678,7 @@ gatherAnnByLevelMarkerList <- function(reann.layer1, ann.layer1, ann.next.layers
 getLeidenHierarchy <- function(p2, out.name, outfile.path,
                                confusion.rate.thresh=c(min=1/9, max=3/7, step.size=0.2),
                                res.step.layer1=0.01, min.res=0, max.res.layer2=1, max.res.increase=1,
-                               res.switch=0.05, clustering.type=NULL,embeding.type=NULL,
+                               res.switch=0.05, clustering.type=NULL, embeding.type=NULL,
                                clf.data=NULL, clusters = NULL,
                                uncertainty.thresholds=c(coverage=0.5, negative=0.5, positive=0.75),
                                graph=NULL, type="PCA", method=conos::leiden.community, n.iterations=50,
@@ -701,7 +702,7 @@ getLeidenHierarchy <- function(p2, out.name, outfile.path,
         setNames(reann.layer1$ann.by.level$annotation$l1 %>% names())
     } else {
       annotation.layer1 <- p2$clusters$PCA$leiden %>% sapply(function(n) paste0("l_",n)) %>%
-                setNames(reann.layer1$ann.by.level$annotation$l1 %>% names())
+                setNames(p2$clusters$PCA$leiden %>% names())
     }
 
     next.layers <- getNextLayersKnnClusters(p2, annotation=annotation.layer1, out.name, outfile.path,
