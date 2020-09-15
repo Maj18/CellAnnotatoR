@@ -1050,3 +1050,14 @@ getProportionality <- function(ann.by.level1, ann.by.level2,
 
   return(props %>% lapply(function(l) data.frame(l)))
 }
+
+selfProp <- function(ann.by.level, raw.counts, metric="rho"){
+  return(getProportionality(ann.by.level, ann.by.level, raw.counts, metric="rho"))
+}
+
+selfProps <- function(ann.marker.level.constant.acc6, raw.counts, metric="rho"){
+  sps <- lapply(ann.marker.level.constant.acc6, function(rep) {
+    selfProp(rep$ann.by.level, raw.counts, metric="rho")
+  })
+  return(sps)
+}
