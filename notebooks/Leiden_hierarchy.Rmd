@@ -40,9 +40,9 @@ outfile.path <- "~/CellAnnotatoR-clean/notebooks/29files/" #Adjust it to your ow
 
 # The first element is max, this is the maximum confusion rate threshold. If step.size != 0,  this will most likely have an influence on the depth (the higher, the deeper) and cluster number per layer at lower levels (the higher, the more) of the hierarchy. The maximum value that max can take is 2/3, which corresponds to a self projection accuracy of 0.6.
 
-# The second one is min, this will definitely decide the cluster number for layer 2. This argument will also decide the cluster number of the lower layers if step.size==0.
+# The second one is min, this will definitely decide the cluster number for layer 2 may have influence on the cluster number of layer 1. This argument will also decide the cluster number of the lower layers if step.size==0.
 
-# The last one is step.size, it decides the step size of the increase of the confusion.rate.threshold, from min, layer by layer (from layer 2) towards max, and the confusion rate threshold then sticks to this max until the last hierachical layer.
+# The last one is step.size, it decides the step size of the increase of the confusion.rate.threshold, from min, layer by layer towards max, and the confusion rate threshold then sticks to this max until the last hierachical layer.
 
 # Keep in mind that the self projection confusion rate corresponds to (1-accuracy)/accuracy
 
